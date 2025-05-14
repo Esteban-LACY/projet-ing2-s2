@@ -1,1 +1,32 @@
+/* Styles personnalisés pour OmnesBnB */
 
+/* Correction pour le footer fixe */
+body {
+    padding-bottom: 60px; /* Hauteur de la barre de navigation */
+}
+
+/* Animations et transitions */
+a, button {
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+/* Personnalisation des formulaires */
+input, textarea {
+    outline: none;
+}
+
+input:focus, textarea:focus {
+    border-color: #000;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+}
+
+/* Styles spécifiques mobile */
+@media (max-width: 640px) {
+    .container {
+        width: 100%;
+    }
+}
