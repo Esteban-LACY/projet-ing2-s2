@@ -1,1 +1,40 @@
+# Protection du fichier .htaccess
+<Files .htaccess>
+    Order allow,deny
+    Deny from all
+</Files>
 
+# Protection des répertoires sans index
+Options -Indexes
+
+# Protection contre l'affichage du contenu des répertoires
+IndexIgnore *
+
+# Activation du moteur de réécriture
+RewriteEngine On
+
+# Définition de la page d'erreur 404
+ErrorDocument 404 /omnesbnb/404.php
+
+# Redirection vers HTTPS (à activer en production)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Empêcher l'accès direct aux fichiers PHP dans /includes
+RewriteRule ^includes/.*\.php$ - [F,L]
+
+# Empêcher l'accès direct aux fichiers PHP dans /models
+RewriteRule ^models/.*\.php$ - [F,L]
+
+# Empêcher l'accès direct aux fichiers PHP dans /controllers
+RewriteRule ^controllers/.*\.php$ - [F,L]
+
+# Protection de l'accès aux fichiers sensibles
+<FilesMatch "^(database\.php|config\.php|.*\.sql)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Gestion des sessions PHP
+php_value session.cookie_httponly 1
+php_value session.use_only_cookies 1
