@@ -1,4 +1,368 @@
-listeLogements.innerHTML = '<tr><td colspan="8" class="text-center">Erreur lors du chargement des données</td></tr>';
+<?php
+/**
+ * Gestion des logements (Administration)
+ * 
+ * Cette page permet de gérer les logements de l'application
+ * 
+ * @author OmnesBnB
+ */
+
+// Inclusion des fichiers nécessaires
+require_once __DIR__ . '/../config/config.php';
+require_once CHEMIN_INCLUDES . '/auth.php';
+
+// Vérifier que l'utilisateur est administrateur
+if (!estConnecte() || !estAdmin()) {
+    rediriger(URL_SITE . '/connexion.php?redirect=admin/logements.php');
+}
+
+// Titre de la page
+$titre = 'Gestion des logements - Administration';
+
+// Paramètres de pagination
+$page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+$limite = 10;
+
+// Récupérer les filtres
+$recherche = isset($_GET['recherche']) ? $_GET['recherche'] : '';
+$ville = isset($_GET['ville']) ? $_GET['ville'] : '';
+$typeLogement = isset($_GET['type_logement']) ? $_GET['type_logement'] : '';
+$idProprietaire = isset($_GET['id_proprietaire']) ? $_GET['id_proprietaire'] : '';
+
+// Inclure l'en-tête
+include CHEMIN_VUES . '/admin/header.php';
+?>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <?php include CHEMIN_VUES . '/admin/sidebar.php'; ?>
+        
+        <!-- Contenu principal -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <h1 class="h2">Gestion des logements</h1>
+                <div class="btn-toolbar mb-2 mb-md-0">
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-export-csv">
+                        <i class="bi bi-download"></i> Exporter CSV
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Filtres -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <form id="form-filtres" method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="recherche" class="form-label">Recherche</label>
+                            <input type="text" class="form-control" id="recherche" name="recherche" placeholder="Titre ou description..." value="<?= htmlspecialchars($recherche) ?>">
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="ville" class="form-label">Ville</label>
+                            <input type="text" class="form-control" id="ville" name="ville" placeholder="Ville..." value="<?= htmlspecialchars($ville) ?>">
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="type_logement" class="form-label">Type de logement</label>
+                            <select class="form-select" id="type_logement" name="type_logement">
+                                <option value="">Tous</option>
+                                <option value="entier" <?= $typeLogement === 'entier' ? 'selected' : '' ?>>Logement entier</option>
+                                <option value="collocation" <?= $typeLogement === 'collocation' ? 'selected' : '' ?>>Collocation</option>
+                                <option value="libere" <?= $typeLogement === 'libere' ? 'selected' : '' ?>>Libéré</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="id_proprietaire" class="form-label">Propriétaire (ID)</label>
+                            <input type="number" class="form-control" id="id_proprietaire" name="id_proprietaire" placeholder="ID du propriétaire..." value="<?= htmlspecialchars($idProprietaire) ?>">
+                        </div>
+                        
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">Filtrer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Liste des logements -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Photo</th>
+                                    <th>Titre</th>
+                                    <th>Ville</th>
+                                    <th>Type</th>
+                                    <th>Prix</th>
+                                    <th>Propriétaire</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="liste-logements">
+                                <tr>
+                                    <td colspan="8" class="text-center">Chargement...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <nav aria-label="Pagination">
+                        <ul class="pagination justify-content-center" id="pagination">
+                            <li class="page-item disabled"><a class="page-link" href="#">Chargement...</a></li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+            
+            <!-- Modal détails logement -->
+            <div class="modal fade" id="modalLogement" tabindex="-1" aria-labelledby="modalLogementLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalLogementLabel">Détails du logement</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="text-center mb-4" id="modal-loading">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Chargement...</span>
+                                </div>
+                                <p class="mt-2">Chargement des données...</p>
+                            </div>
+                            
+                            <div id="modal-content" style="display: none;">
+                                <!-- Carousel des photos -->
+                                <div id="carousel-photos" class="carousel slide mb-4" data-bs-ride="carousel">
+                                    <div class="carousel-inner" id="carousel-inner">
+                                        <!-- Les photos seront ajoutées ici dynamiquement -->
+                                    </div>
+                                    <button class="carousel-control-prev" type="button" data-bs-target="#carousel-photos" data-bs-slide="prev">
+                                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                        <span class="visually-hidden">Précédent</span>
+                                    </button>
+                                    <button class="carousel-control-next" type="button" data-bs-target="#carousel-photos" data-bs-slide="next">
+                                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                        <span class="visually-hidden">Suivant</span>
+                                    </button>
+                                </div>
+                                
+                                <!-- Formulaire de modification -->
+                                <form id="form-logement">
+                                    <input type="hidden" id="logement-id" name="id_logement">
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-8">
+                                            <label for="titre" class="form-label">Titre</label>
+                                            <input type="text" class="form-control" id="titre" name="titre" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="prix" class="form-label">Prix par nuit (€)</label>
+                                            <input type="number" class="form-control" id="prix" name="prix" step="0.01" min="0" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="description" class="form-label">Description</label>
+                                        <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="adresse" class="form-label">Adresse</label>
+                                            <input type="text" class="form-control" id="adresse" name="adresse" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label for="ville" class="form-label">Ville</label>
+                                            <input type="text" class="form-control" id="ville" name="ville" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label for="code_postal" class="form-label">Code postal</label>
+                                            <input type="text" class="form-control" id="code_postal" name="code_postal" required pattern="[0-9]{5}">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="type_logement" class="form-label">Type de logement</label>
+                                            <select class="form-select" id="type_logement" name="type_logement" required>
+                                                <option value="entier">Logement entier</option>
+                                                <option value="collocation">Collocation</option>
+                                                <option value="libere">Libéré</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="nb_places" class="form-label">Nombre de places</label>
+                                            <input type="number" class="form-control" id="nb_places" name="nb_places" min="1" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="latitude" class="form-label">Latitude</label>
+                                            <input type="text" class="form-control" id="latitude" name="latitude" readonly>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="longitude" class="form-label">Longitude</label>
+                                            <input type="text" class="form-control" id="longitude" name="longitude" readonly>
+                                        </div>
+                                    </div>
+                                </form>
+                                
+                                <!-- Informations propriétaire -->
+                                <div class="card border-0 shadow-sm mb-4">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title mb-0">Propriétaire</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-2 text-center">
+                                                <img id="proprietaire-photo" src="" alt="Photo de profil" class="img-fluid rounded-circle mb-2" style="width: 80px; height: 80px; object-fit: cover;">
+                                            </div>
+                                            <div class="col-md-10">
+                                                <h5 id="proprietaire-name"></h5>
+                                                <p id="proprietaire-email" class="mb-1"></p>
+                                                <p id="proprietaire-phone" class="mb-0"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Liste des réservations -->
+                                <div class="card border-0 shadow-sm mb-4">
+                                    <div class="card-header bg-light">
+                                        <h5 class="card-title mb-0">Réservations</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover">
+                                                <thead>
+                                                    <tr>
+                                                        <th>ID</th>
+                                                        <th>Locataire</th>
+                                                        <th>Dates</th>
+                                                        <th>Prix</th>
+                                                        <th>Statut</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="liste-reservations">
+                                                    <tr>
+                                                        <td colspan="5" class="text-center">Aucune réservation</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-danger me-auto" id="btn-supprimer">Supprimer</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                            <button type="button" class="btn btn-primary" id="btn-enregistrer">Enregistrer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Éléments DOM
+    const listeLogements = document.getElementById('liste-logements');
+    const pagination = document.getElementById('pagination');
+    const modalLogement = new bootstrap.Modal(document.getElementById('modalLogement'));
+    const btnEnregistrer = document.getElementById('btn-enregistrer');
+    const btnSupprimer = document.getElementById('btn-supprimer');
+    const formLogement = document.getElementById('form-logement');
+    const modalLoading = document.getElementById('modal-loading');
+    const modalContent = document.getElementById('modal-content');
+    
+    // Paramètres courants
+    let paramsActuels = {
+        page: <?= $page ?>,
+        limite: <?= $limite ?>,
+        recherche: <?= json_encode($recherche) ?>,
+        ville: <?= json_encode($ville) ?>,
+        type_logement: <?= json_encode($typeLogement) ?>,
+        id_proprietaire: <?= json_encode($idProprietaire) ?>
+    };
+    
+    // Charger les logements
+    chargerLogements();
+    
+    // Événement de soumission du formulaire de filtres
+    document.getElementById('form-filtres').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        paramsActuels = {
+            page: 1,
+            limite: <?= $limite ?>
+        };
+        
+        for (const [key, value] of formData.entries()) {
+            paramsActuels[key] = value;
+        }
+        
+        // Mettre à jour l'URL
+        window.history.pushState({}, '', 'logements.php?' + new URLSearchParams(paramsActuels).toString());
+        
+        // Recharger les logements
+        chargerLogements();
+    });
+    
+    // Exportation CSV
+    document.getElementById('btn-export-csv').addEventListener('click', function() {
+        exporterCSV();
+    });
+    
+    // Événements de la modal
+    btnEnregistrer.addEventListener('click', function() {
+        enregistrerLogement();
+    });
+    
+    btnSupprimer.addEventListener('click', function() {
+        if (confirm('Êtes-vous sûr de vouloir supprimer ce logement ? Cette action est irréversible.')) {
+            supprimerLogement();
+        }
+    });
+    
+    /**
+     * Charge la liste des logements via une requête AJAX
+     */
+    function chargerLogements() {
+        const params = new URLSearchParams();
+        
+        for (const [key, value] of Object.entries(paramsActuels)) {
+            if (value !== '') {
+                params.append(key, value);
+            }
+        }
+        
+        // Afficher un état de chargement
+        listeLogements.innerHTML = '<tr><td colspan="8" class="text-center">Chargement...</td></tr>';
+        pagination.innerHTML = '<li class="page-item disabled"><a class="page-link" href="#">Chargement...</a></li>';
+        
+        fetch('../controllers/admin.php?action=recuperer_logements&' + params.toString())
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    afficherLogements(data.logements, data.total, data.page, data.limite, data.total_pages);
+                } else {
+                    listeLogements.innerHTML = '<tr><td colspan="8" class="text-center">Erreur lors du chargement des données</td></tr>';
+                    pagination.innerHTML = '';
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la requête:', error);
+                listeLogements.innerHTML = '<tr><td colspan="8" class="text-center">Erreur lors du chargement des données</td></tr>';
                 pagination.innerHTML = '';
             });
     }
