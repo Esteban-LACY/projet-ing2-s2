@@ -1,89 +1,112 @@
 <?php
 /**
- * Configuration pour l'API Google Maps
+ * Configuration de l'API Google Maps
+ * 
+ * Ce fichier contient les paramètres de configuration pour l'intégration de Google Maps
+ * 
+ * @author OmnesBnB
  */
 
-// Clé API Google Maps
-define('GOOGLE_MAPS_API_KEY', 'VOTRE_CLE_API_GOOGLE_MAPS');
+// Clé API Google Maps (à remplacer par votre propre clé)
+define('GOOGLE_MAPS_API_KEY', 'votre_cle_api_google_maps');
 
 // Options par défaut pour la carte
-define('MAPS_DEFAULT_LAT', 46.2276); // Latitude par défaut (centre de la France)
-define('MAPS_DEFAULT_LNG', 2.2137); // Longitude par défaut (centre de la France)
-define('MAPS_DEFAULT_ZOOM', 5); // Niveau de zoom par défaut
-
-// URL de l'API Google Maps
-define('MAPS_API_URL', 'https://maps.googleapis.com/maps/api/js');
-
-// Options pour Geocoding
-define('MAPS_GEOCODING_URL', 'https://maps.googleapis.com/maps/api/geocode/json');
-
-// Options pour Places API
-define('MAPS_PLACES_URL', 'https://maps.googleapis.com/maps/api/place');
+define('GOOGLE_MAPS_DEFAULT_LAT', 48.856614); // Latitude par défaut (Paris)
+define('GOOGLE_MAPS_DEFAULT_LNG', 2.3522219); // Longitude par défaut (Paris)
+define('GOOGLE_MAPS_DEFAULT_ZOOM', 13); // Niveau de zoom par défaut
 
 /**
- * Génère l'URL pour l'API Google Maps
- * @param array $libraries Librairies à inclure
- * @param string $callback Fonction de callback
- * @return string URL complète
+ * Génère le script pour charger l'API Google Maps
+ * 
+ * @param boolean $includeLibraries Inclure les bibliothèques supplémentaires (places, geometry, etc.)
+ * @return string Balise script pour l'API Google Maps
  */
-function getMapsApiUrl($libraries = [], $callback = 'initMap') {
-    $url = MAPS_API_URL . '?key=' . GOOGLE_MAPS_API_KEY;
+function genererScriptGoogleMaps($includeLibraries = true) {
+    $url = 'https://maps.googleapis.com/maps/api/js?key=' . GOOGLE_MAPS_API_KEY;
     
-    if (!empty($libraries)) {
-        $url .= '&libraries=' . implode(',', $libraries);
+    if ($includeLibraries) {
+        $url .= '&libraries=places,geometry';
     }
     
-    if ($callback) {
-        $url .= '&callback=' . $callback;
-    }
+    $url .= '&callback=initGoogleMaps';
     
-    return $url;
+    return '<script src="' . $url . '" async defer></script>';
 }
 
 /**
- * Effectue une requête de géocodage
+ * Géocode une adresse pour obtenir les coordonnées GPS
+ * 
  * @param string $adresse Adresse à géocoder
- * @return array|false Résultat du géocodage ou false
+ * @return array|false Tableau avec lat et lng ou false en cas d'erreur
  */
-function geocodeAdresse($adresse) {
-    $url = MAPS_GEOCODING_URL . '?address=' . urlencode($adresse) . '&key=' . GOOGLE_MAPS_API_KEY;
+function geocoderAdresse($adresse) {
+    $adresse = urlencode($adresse);
+    $url = "https://maps.googleapis.com/maps/api/geocode/json?address={$adresse}&key=" . GOOGLE_MAPS_API_KEY;
     
-    $response = file_get_contents($url);
+    // Initialiser cURL
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     
-    if ($response === false) {
+    // Exécuter la requête
+    $response = curl_exec($ch);
+    
+    // Vérifier s'il y a des erreurs
+    if (curl_errno($ch)) {
+        error_log('Erreur cURL: ' . curl_error($ch));
+        curl_close($ch);
         return false;
     }
     
+    curl_close($ch);
+    
+    // Décoder la réponse
     $data = json_decode($response, true);
     
+    // Vérifier le statut de la réponse
     if ($data['status'] !== 'OK') {
+        error_log('Erreur de géocodage: ' . $data['status']);
         return false;
     }
     
-    $result = $data['results'][0];
+    // Récupérer les coordonnées
+    $location = $data['results'][0]['geometry']['location'];
     
     return [
-        'latitude' => $result['geometry']['location']['lat'],
-        'longitude' => $result['geometry']['location']['lng'],
-        'adresse_formatee' => $result['formatted_address'],
-        'code_postal' => getComponentFromAddress($result, 'postal_code'),
-        'ville' => getComponentFromAddress($result, 'locality')
+        'lat' => $location['lat'],
+        'lng' => $location['lng'],
+        'adresse_formatee' => $data['results'][0]['formatted_address']
     ];
 }
 
 /**
- * Récupère un composant spécifique d'une adresse
- * @param array $addressData Données d'adresse
- * @param string $type Type de composant
- * @return string Valeur du composant
+ * Calcule la distance entre deux points GPS (en kilomètres)
+ * 
+ * @param float $lat1 Latitude du point 1
+ * @param float $lng1 Longitude du point 1
+ * @param float $lat2 Latitude du point 2
+ * @param float $lng2 Longitude du point 2
+ * @return float Distance en kilomètres
  */
-function getComponentFromAddress($addressData, $type) {
-    foreach ($addressData['address_components'] as $component) {
-        if (in_array($type, $component['types'])) {
-            return $component['long_name'];
-        }
-    }
+function calculerDistance($lat1, $lng1, $lat2, $lng2) {
+    // Rayon de la Terre en kilomètres
+    $rayonTerre = 6371;
     
-    return '';
+    // Convertir les degrés en radians
+    $lat1 = deg2rad($lat1);
+    $lng1 = deg2rad($lng1);
+    $lat2 = deg2rad($lat2);
+    $lng2 = deg2rad($lng2);
+    
+    // Formule de Haversine
+    $dLat = $lat2 - $lat1;
+    $dLng = $lng2 - $lng1;
+    
+    $a = sin($dLat/2) * sin($dLat/2) + cos($lat1) * cos($lat2) * sin($dLng/2) * sin($dLng/2);
+    $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+    $distance = $rayonTerre * $c;
+    
+    return $distance;
 }
 ?>
