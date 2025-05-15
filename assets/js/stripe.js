@@ -1,152 +1,159 @@
 /**
- * Script pour l'intégration de Stripe
+ * Intégration Stripe pour OmnesBnB
+ * Gère le processus de paiement
  */
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialiser Stripe
-    initStripe();
-});
-
-/**
- * Initialise Stripe
- */
-function initStripe() {
-    // Vérifier si l'élément de formulaire de paiement existe
-    const paymentForm = document.getElementById('payment-form');
-    
-    if (!paymentForm) {
-        return;
+class StripePayment {
+    constructor() {
+        // Initialisation des variables
+        this.stripe = null;
+        this.elements = null;
+        this.paymentElement = null;
+        this.formElement = null;
+        
+        // Éléments du DOM
+        this.submitButton = null;
+        this.errorMessage = null;
     }
     
-    // Récupérer la clé publique Stripe
-    const stripePublicKey = paymentForm.getAttribute('data-stripe-key');
-    
-    if (!stripePublicKey) {
-        console.error('Clé publique Stripe manquante');
-        return;
+    /**
+     * Initialise Stripe avec la clé publique
+     * @param {string} publishableKey - Clé publique Stripe
+     */
+    init(publishableKey) {
+        if (!publishableKey) {
+            console.error('Clé API Stripe manquante');
+            return;
+        }
+        
+        this.stripe = Stripe(publishableKey);
     }
     
-    // Initialiser Stripe
-    const stripe = Stripe(stripePublicKey);
-    
-    // Récupérer l'ID de session
-    const sessionId = paymentForm.getAttribute('data-session-id');
-    
-    if (sessionId) {
-        // Redirection vers la page de paiement Stripe
-        stripe.redirectToCheckout({ sessionId: sessionId })
-            .then(function(result) {
-                if (result.error) {
-                    // Afficher l'erreur
-                    const errorElement = document.getElementById('stripe-error');
-                    if (errorElement) {
-                        errorElement.textContent = result.error.message;
-                        errorElement.style.display = 'block';
-                    }
+    /**
+     * Configure le formulaire de paiement
+     * @param {string} clientSecret - Secret client pour la session de paiement
+     * @param {string} formId - ID du formulaire de paiement
+     */
+    setupPaymentForm(clientSecret, formId) {
+        if (!this.stripe || !clientSecret) {
+            console.error('Stripe non initialisé ou client secret manquant');
+            return;
+        }
+        
+        // Récupérer les éléments du DOM
+        this.formElement = document.getElementById(formId);
+        if (!this.formElement) {
+            console.error('Formulaire de paiement non trouvé');
+            return;
+        }
+        
+        this.submitButton = this.formElement.querySelector('#submit-payment');
+        this.errorMessage = this.formElement.querySelector('#payment-error');
+        
+        // Créer les éléments Stripe
+        this.elements = this.stripe.elements({
+            clientSecret: clientSecret,
+            appearance: {
+                theme: 'stripe',
+                variables: {
+                    colorPrimary: '#000000',
+                    colorBackground: '#ffffff',
+                    colorText: '#333333',
+                    colorDanger: '#ff0000',
+                    fontFamily: 'SF Pro Display, sans-serif',
+                    borderRadius: '8px'
                 }
-            });
-    } else {
-        // Créer un élément de carte
-        const elements = stripe.elements();
-        
-        // Personnalisation de l'élément de carte
-        const style = {
-            base: {
-                color: '#32325d',
-                fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
-                fontSmoothing: 'antialiased',
-                fontSize: '16px',
-                '::placeholder': {
-                    color: '#aab7c4'
-                }
-            },
-            invalid: {
-                color: '#fa755a',
-                iconColor: '#fa755a'
-            }
-        };
-        
-        // Créer un élément de carte
-        const card = elements.create('card', { style: style });
-        
-        // Monter l'élément de carte dans le DOM
-        card.mount('#card-element');
-        
-        // Gérer les erreurs de validation en temps réel
-        card.addEventListener('change', function(event) {
-            const displayError = document.getElementById('card-errors');
-            
-            if (event.error) {
-                displayError.textContent = event.error.message;
-            } else {
-                displayError.textContent = '';
             }
         });
         
-        // Gérer la soumission du formulaire
-        paymentForm.addEventListener('submit', function(event) {
-            event.preventDefault();
+        // Créer et monter l'élément de paiement
+        this.paymentElement = this.elements.create('payment');
+        this.paymentElement.mount('#payment-element');
+        
+        // Ajouter les écouteurs d'événements
+        this.setupEventListeners();
+    }
+    
+    /**
+     * Configure les écouteurs d'événements pour le formulaire
+     */
+    setupEventListeners() {
+        if (!this.formElement) return;
+        
+        this.formElement.addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            // Désactiver le bouton de soumission pour éviter les clics multiples
-            const submitButton = paymentForm.querySelector('button[type="submit"]');
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<div class="spinner"></div> Traitement en cours...';
+            if (!this.stripe || !this.elements) {
+                return;
+            }
             
-            // Créer un token de paiement
-            stripe.createToken(card).then(function(result) {
-                if (result.error) {
-                    // Afficher l'erreur
-                    const errorElement = document.getElementById('card-errors');
-                    if (errorElement) {
-                        errorElement.textContent = result.error.message;
-                    }
-                    
-                    // Réactiver le bouton
-                    submitButton.disabled = false;
-                    submitButton.textContent = 'Payer';
-                } else {
-                    // Envoyer le token au serveur
-                    stripeTokenHandler(result.token);
+            // Désactiver le bouton durant le traitement
+            if (this.submitButton) {
+                this.submitButton.disabled = true;
+                this.submitButton.textContent = 'Traitement en cours...';
+            }
+            
+            // Confirmer le paiement
+            const result = await this.stripe.confirmPayment({
+                elements: this.elements,
+                confirmParams: {
+                    return_url: `${window.location.origin}/reservation/confirmation.php`
                 }
             });
-        });
-        
-        /**
-         * Envoie le token Stripe au serveur
-         * @param {object} token - Token Stripe
-         */
-        function stripeTokenHandler(token) {
-            // Insérer le token ID dans le formulaire pour qu'il soit envoyé au serveur
-            const hiddenInput = document.createElement('input');
-            hiddenInput.setAttribute('type', 'hidden');
-            hiddenInput.setAttribute('name', 'stripeToken');
-            hiddenInput.setAttribute('value', token.id);
-            paymentForm.appendChild(hiddenInput);
             
-            // Soumettre le formulaire
-            paymentForm.submit();
+            // Gérer les erreurs potentielles
+            if (result.error) {
+                if (this.errorMessage) {
+                    this.errorMessage.textContent = result.error.message;
+                    this.errorMessage.style.display = 'block';
+                }
+                
+                // Réactiver le bouton
+                if (this.submitButton) {
+                    this.submitButton.disabled = false;
+                    this.submitButton.textContent = 'Payer';
+                }
+            }
+            // Le paiement est traité et l'utilisateur sera redirigé
+        });
+    }
+    
+    /**
+     * Vérifie le statut du paiement lors de la redirection
+     * @param {string} clientSecret - Secret client pour la session de paiement 
+     */
+    async checkPaymentStatus(clientSecret) {
+        if (!this.stripe) {
+            console.error('Stripe non initialisé');
+            return;
+        }
+        
+        const { paymentIntent } = await this.stripe.retrievePaymentIntent(clientSecret);
+        
+        const statusElement = document.getElementById('payment-status');
+        if (!statusElement) return;
+        
+        switch (paymentIntent.status) {
+            case 'succeeded':
+                statusElement.textContent = 'Paiement réussi !';
+                statusElement.classList.add('text-green-500');
+                break;
+            case 'processing':
+                statusElement.textContent = 'Paiement en cours de traitement.';
+                statusElement.classList.add('text-yellow-500');
+                break;
+            case 'requires_payment_method':
+                statusElement.textContent = 'Paiement échoué. Veuillez réessayer.';
+                statusElement.classList.add('text-red-500');
+                break;
+            default:
+                statusElement.textContent = 'Une erreur est survenue.';
+                statusElement.classList.add('text-red-500');
+                break;
         }
     }
 }
 
-/**
- * Calcule le prix total d'une réservation
- * @param {number} prixNuit - Prix par nuit
- * @param {string} dateDebut - Date de début (YYYY-MM-DD)
- * @param {string} dateFin - Date de fin (YYYY-MM-DD)
- * @returns {number} Prix total
- */
-function calculerPrixTotal(prixNuit, dateDebut, dateFin) {
-    if (!dateDebut || !dateFin) {
-        return 0;
-    }
-    
-    const debut = new Date(dateDebut);
-    const fin = new Date(dateFin);
-    
-    // Calcul de la différence en jours
-    const diffTime = Math.abs(fin - debut);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return prixNuit * diffDays;
-}
+// Export de l'instance pour utilisation dans d'autres fichiers
+const stripePayment = new StripePayment();
+window.stripePayment = stripePayment;
