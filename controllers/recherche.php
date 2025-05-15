@@ -1,174 +1,162 @@
 <?php
 /**
- * Contrôleur pour la recherche de logements
+ * Contrôleur pour la gestion des recherches
+ * 
+ * Ce fichier gère les actions liées à la recherche de logements
+ * 
+ * @author OmnesBnB
  */
-require_once 'config/config.php';
-require_once 'models/logement.php';
-require_once 'includes/fonctions.php';
 
-class RechercheController {
-    private $logementModel;
+// Inclusion des fichiers nécessaires
+require_once __DIR__ . '/../config/config.php';
+require_once CHEMIN_MODELES . '/logement.php';
+require_once CHEMIN_MODELES . '/disponibilite.php';
+
+// Traitement des actions
+$action = isset($_GET['action']) ? $_GET['action'] : 'rechercher';
+
+switch ($action) {
+    case 'rechercher':
+        actionRechercherLogements();
+        break;
+    case 'suggestions':
+        actionSuggestionVilles();
+        break;
+    default:
+        repondreJSON(['success' => false, 'message' => 'Action non reconnue']);
+}
+
+/**
+ * Recherche des logements selon les critères fournis
+ */
+function actionRechercherLogements() {
+    // Paramètres de recherche
+    $filtres = [];
     
-    /**
-     * Constructeur
-     */
-    public function __construct() {
-        $this->logementModel = new LogementModel();
+    // Filtrer par lieu (ville ou code postal)
+    if (isset($_GET['lieu']) && !empty($_GET['lieu'])) {
+        $lieu = nettoyer($_GET['lieu']);
+        
+        // Déterminer si c'est un code postal ou une ville
+        if (preg_match('/^[0-9]{5}$/', $lieu)) {
+            $filtres['code_postal'] = $lieu;
+        } else {
+            $filtres['ville'] = $lieu;
+        }
     }
     
-    /**
-     * Recherche des logements selon des critères
-     * @param array $criteres Critères de recherche
-     * @return array Résultats de la recherche
-     */
-    public function rechercher($criteres = []) {
-        // Nettoyage et validation des critères
-        $criteresValides = $this->nettoyerCriteres($criteres);
-        
-        // Recherche des logements
-        $logements = $this->logementModel->rechercher($criteresValides);
-        
-        // Format de réponse pour AJAX
-        if (isset($criteres['ajax']) && $criteres['ajax']) {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'succes' => true,
-                'resultats' => $logements,
-                'nombre' => count($logements)
-            ]);
-            exit;
-        }
-        
-        return $logements;
+    // Filtrer par type de logement
+    if (isset($_GET['type_logement']) && !empty($_GET['type_logement'])) {
+        $filtres['type_logement'] = nettoyer($_GET['type_logement']);
     }
     
-    /**
-     * Recherche des logements par localisation
-     * @param float $latitude Latitude
-     * @param float $longitude Longitude
-     * @param float $rayon Rayon de recherche en km
-     * @param array $criteres Critères additionnels
-     * @return array Résultats de la recherche
-     */
-    public function rechercherParLocalisation($latitude, $longitude, $rayon = 10, $criteres = []) {
-        // Validation des coordonnées
-        $latitude = floatval($latitude);
-        $longitude = floatval($longitude);
-        $rayon = floatval($rayon);
-        
-        if ($latitude == 0 || $longitude == 0 || $rayon <= 0) {
-            return [];
-        }
-        
-        // Nettoyage et validation des critères
-        $criteresValides = $this->nettoyerCriteres($criteres);
-        
-        // Ajout des critères de localisation
-        $criteresValides['latitude'] = $latitude;
-        $criteresValides['longitude'] = $longitude;
-        $criteresValides['rayon'] = $rayon;
-        
-        // Recherche des logements
-        $logements = $this->logementModel->rechercherParLocalisation($criteresValides);
-        
-        // Format de réponse pour AJAX
-        if (isset($criteres['ajax']) && $criteres['ajax']) {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'succes' => true,
-                'resultats' => $logements,
-                'nombre' => count($logements)
-            ]);
-            exit;
-        }
-        
-        return $logements;
+    // Filtrer par prix minimum
+    if (isset($_GET['prix_min']) && is_numeric($_GET['prix_min'])) {
+        $filtres['prix_min'] = floatval($_GET['prix_min']);
     }
     
-    /**
-     * Nettoie et valide les critères de recherche
-     * @param array $criteres Critères bruts
-     * @return array Critères nettoyés et validés
-     */
-    private function nettoyerCriteres($criteres) {
-        $criteresValides = [];
-        
-        // Lieu (ville, code postal, adresse)
-        if (isset($criteres['lieu']) && !empty($criteres['lieu'])) {
-            $criteresValides['lieu'] = nettoyer($criteres['lieu']);
-        }
-        
-        // Dates
-        if (isset($criteres['date_debut']) && !empty($criteres['date_debut'])) {
-            if (estDateValide($criteres['date_debut'])) {
-                $criteresValides['date_debut'] = $criteres['date_debut'];
-            }
-        }
-        
-        if (isset($criteres['date_fin']) && !empty($criteres['date_fin'])) {
-            if (estDateValide($criteres['date_fin'])) {
-                $criteresValides['date_fin'] = $criteres['date_fin'];
-            }
-        }
-        
-        // Type de logement
-        if (isset($criteres['type_logement']) && !empty($criteres['type_logement'])) {
-            if (in_array($criteres['type_logement'], ['entier', 'collocation', 'libere'])) {
-                $criteresValides['type_logement'] = $criteres['type_logement'];
-            }
-        }
-        
-        // Prix
-        if (isset($criteres['prix_min']) && !empty($criteres['prix_min'])) {
-            $prixMin = floatval($criteres['prix_min']);
-            if ($prixMin >= 0) {
-                $criteresValides['prix_min'] = $prixMin;
-            }
-        }
-        
-        if (isset($criteres['prix_max']) && !empty($criteres['prix_max'])) {
-            $prixMax = floatval($criteres['prix_max']);
-            if ($prixMax > 0) {
-                $criteresValides['prix_max'] = $prixMax;
-            }
-        }
-        
-        // Nombre de places
-        if (isset($criteres['nb_places_min']) && !empty($criteres['nb_places_min'])) {
-            $nbPlacesMin = intval($criteres['nb_places_min']);
-            if ($nbPlacesMin > 0) {
-                $criteresValides['nb_places_min'] = $nbPlacesMin;
-            }
-        }
-        
-        // Tri
-        if (isset($criteres['tri']) && !empty($criteres['tri'])) {
-            if (in_array($criteres['tri'], ['prix_asc', 'prix_desc', 'date_asc', 'date_desc'])) {
-                $criteresValides['tri'] = $criteres['tri'];
-            }
-        }
-        
-        return $criteresValides;
+    // Filtrer par prix maximum
+    if (isset($_GET['prix_max']) && is_numeric($_GET['prix_max'])) {
+        $filtres['prix_max'] = floatval($_GET['prix_max']);
     }
     
-    /**
-     * Récupère les suggestions de villes pour l'autocomplétion
-     * @param string $terme Terme de recherche
-     * @return array Suggestions
-     */
-    public function getSuggestionVilles($terme) {
-        if (empty($terme) || strlen($terme) < 2) {
-            return [];
-        }
-        
-        $terme = nettoyer($terme);
-        
-        $suggestions = $this->logementModel->rechercherVilles($terme);
-        
-        // Format de réponse pour AJAX
-        header('Content-Type: application/json');
-        echo json_encode($suggestions);
-        exit;
+    // Filtrer par nombre de places
+    if (isset($_GET['nb_places']) && is_numeric($_GET['nb_places'])) {
+        $filtres['nb_places'] = intval($_GET['nb_places']);
     }
+    
+    // Filtrer par disponibilité
+    if (isset($_GET['date_debut']) && !empty($_GET['date_debut']) && isset($_GET['date_fin']) && !empty($_GET['date_fin'])) {
+        $dateDebut = nettoyer($_GET['date_debut']);
+        $dateFin = nettoyer($_GET['date_fin']);
+        
+        if (validateDate($dateDebut) && validateDate($dateFin) && strtotime($dateDebut) < strtotime($dateFin)) {
+            $filtres['date_debut'] = $dateDebut;
+            $filtres['date_fin'] = $dateFin;
+        }
+    }
+    
+    // Options de tri
+    $tri = isset($_GET['tri']) ? nettoyer($_GET['tri']) : 'prix_asc';
+    
+    // Pagination
+    $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+    $limite = isset($_GET['limite']) ? intval($_GET['limite']) : 10;
+    
+    if ($page < 1) {
+        $page = 1;
+    }
+    
+    if ($limite < 1 || $limite > 50) {
+        $limite = 10;
+    }
+    
+    $offset = ($page - 1) * $limite;
+    
+    // Récupérer les logements
+    $logements = rechercherLogements($filtres, $tri, $limite, $offset);
+    
+    // Ajouter la photo principale pour chaque logement
+    foreach ($logements as &$logement) {
+        $photos = recupererPhotosLogement($logement['id']);
+        $logement['photo_principale'] = !empty($photos) ? $photos[0]['url'] : null;
+    }
+    
+    // Récupérer le nombre total de logements correspondant aux critères
+    $total = compterLogements($filtres);
+    
+    // Calculer le nombre total de pages
+    $totalPages = ceil($total / $limite);
+    
+    // Répondre avec succès
+    repondreJSON([
+        'success' => true,
+        'logements' => $logements,
+        'total' => $total,
+        'page' => $page,
+        'limite' => $limite,
+        'total_pages' => $totalPages
+    ]);
+}
+
+/**
+ * Récupère des suggestions de villes pour l'autocomplétion
+ */
+function actionSuggestionVilles() {
+    // Récupérer le terme de recherche
+    $terme = isset($_GET['terme']) ? nettoyer($_GET['terme']) : '';
+    
+    if (empty($terme) || strlen($terme) < 2) {
+        repondreJSON(['success' => true, 'suggestions' => []]);
+        return;
+    }
+    
+    // Récupérer les suggestions de villes
+    $suggestions = recupererSuggestionsVilles($terme);
+    
+    // Répondre avec succès
+    repondreJSON(['success' => true, 'suggestions' => $suggestions]);
+}
+
+/**
+ * Vérifie si une date est valide
+ * 
+ * @param string $date Date à vérifier (format Y-m-d)
+ * @return boolean True si la date est valide, false sinon
+ */
+function validateDate($date) {
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    return $d && $d->format('Y-m-d') === $date;
+}
+
+/**
+ * Renvoie une réponse JSON et termine le script
+ * 
+ * @param array $donnees Données à renvoyer
+ */
+function repondreJSON($donnees) {
+    header('Content-Type: application/json');
+    echo json_encode($donnees);
+    exit;
 }
 ?>
