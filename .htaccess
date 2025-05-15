@@ -1,40 +1,41 @@
-# Protection du fichier .htaccess
-<Files .htaccess>
-    Order allow,deny
-    Deny from all
-</Files>
-
-# Protection des répertoires sans index
-Options -Indexes
-
-# Protection contre l'affichage du contenu des répertoires
-IndexIgnore *
-
-# Activation du moteur de réécriture
+# Active la réécriture d'URL
 RewriteEngine On
 
-# Définition de la page d'erreur 404
-ErrorDocument 404 /omnesbnb/404.php
+# Condition pour éviter les boucles de redirection
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
 
-# Redirection vers HTTPS (à activer en production)
-# RewriteCond %{HTTPS} off
-# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Redirection des URLs vers index.php
+RewriteRule ^(.*)$ index.php?url=$1 [QSA,L]
 
-# Empêcher l'accès direct aux fichiers PHP dans /includes
-RewriteRule ^includes/.*\.php$ - [F,L]
-
-# Empêcher l'accès direct aux fichiers PHP dans /models
-RewriteRule ^models/.*\.php$ - [F,L]
-
-# Empêcher l'accès direct aux fichiers PHP dans /controllers
-RewriteRule ^controllers/.*\.php$ - [F,L]
-
-# Protection de l'accès aux fichiers sensibles
-<FilesMatch "^(database\.php|config\.php|.*\.sql)$">
-    Order allow,deny
+# Protection du dossier includes
+<FilesMatch "^includes/">
+    Order deny,allow
     Deny from all
 </FilesMatch>
 
-# Gestion des sessions PHP
-php_value session.cookie_httponly 1
-php_value session.use_only_cookies 1
+# Protection des fichiers de configuration
+<FilesMatch "^config\.php$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Désactiver l'affichage du contenu des répertoires
+Options -Indexes
+
+# Définir le fuseau horaire par défaut
+php_value date.timezone "Europe/Paris"
+
+# Configuration de la sécurité
+<IfModule mod_headers.c>
+    # Protection contre le clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+    # Protection XSS
+    Header always set X-XSS-Protection "1; mode=block"
+    # Protection contre le MIME-sniffing
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Augmenter la taille maximale des fichiers uploadés
+php_value upload_max_filesize 10M
+php_value post_max_size 10M
