@@ -1,559 +1,707 @@
 <?php
 /**
  * Contrôleur pour la gestion des logements
+ * 
+ * Ce fichier gère les actions liées aux logements (publication, modification, suppression, etc.)
+ * 
+ * @author OmnesBnB
  */
-require_once 'config/config.php';
-require_once 'models/logement.php';
-require_once 'includes/fonctions.php';
-require_once 'includes/validation.php';
 
-class LogementController {
-    private $logementModel;
-    
-    /**
-     * Constructeur
-     */
-    public function __construct() {
-        $this->logementModel = new LogementModel();
+// Inclusion des fichiers nécessaires
+require_once __DIR__ . '/../config/config.php';
+require_once CHEMIN_MODELES . '/logement.php';
+require_once CHEMIN_MODELES . '/disponibilite.php';
+require_once CHEMIN_INCLUDES . '/validation.php';
+
+// Traitement des actions
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+
+switch ($action) {
+    case 'publier':
+        actionPublierLogement();
+        break;
+    case 'modifier':
+        actionModifierLogement();
+        break;
+    case 'supprimer':
+        actionSupprimerLogement();
+        break;
+    case 'recuperer':
+        actionRecupererLogement();
+        break;
+    case 'recuperer_tous':
+        actionRecupererTousLogements();
+        break;
+    case 'upload_photo':
+        actionUploadPhoto();
+        break;
+    case 'supprimer_photo':
+        actionSupprimerPhoto();
+        break;
+    default:
+        // Si aucune action n'est spécifiée, rediriger vers la page d'accueil
+        rediriger(URL_SITE);
+}
+
+/**
+ * Gère la publication d'un nouveau logement
+ */
+function actionPublierLogement() {
+    // Vérifier si l'utilisateur est connecté
+    if (!estConnecte()) {
+        repondreJSON(['success' => false, 'message' => 'Vous devez être connecté pour publier un logement']);
+        return;
     }
     
-    /**
-     * Traite la publication d'un logement
-     */
-    public function publier() {
-        // Vérification si l'utilisateur est connecté
-        if (!estConnecte()) {
-            $_SESSION['url_apres_connexion'] = 'publier.php';
-            afficherMessage('Vous devez être connecté pour publier un logement.', 'erreur');
-            rediriger('connexion.php');
-            return;
-        }
-        
-        // Vérification si l'utilisateur a vérifié son email
-        if (EMAIL_VERIFICATION && !$_SESSION['utilisateur_est_verifie']) {
-            afficherMessage('Vous devez vérifier votre email avant de publier un logement.', 'avertissement');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Vérification si le formulaire a été soumis
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return;
-        }
-        
-        // Récupération et nettoyage des données
-        $titre = nettoyer($_POST['titre'] ?? '');
-        $description = nettoyer($_POST['description'] ?? '');
-        $adresse = nettoyer($_POST['adresse'] ?? '');
-        $ville = nettoyer($_POST['ville'] ?? '');
-        $codePostal = nettoyer($_POST['code_postal'] ?? '');
-        $prix = floatval($_POST['prix'] ?? 0);
-        $typeLogement = nettoyer($_POST['type_logement'] ?? '');
-        $nbPlaces = intval($_POST['nb_places'] ?? 1);
-        $latitude = floatval($_POST['latitude'] ?? 0);
-        $longitude = floatval($_POST['longitude'] ?? 0);
-        
-        // Récupération des dates de disponibilité
-        $datesDebut = $_POST['dates_debut'] ?? [];
-        $datesFin = $_POST['dates_fin'] ?? [];
-        
-        // Validation des données
-        $erreurs = [];
-        
-        if (empty($titre)) {
-            $erreurs['titre'] = 'Le titre est obligatoire.';
-        }
-        
-        if (empty($description)) {
-            $erreurs['description'] = 'La description est obligatoire.';
-        }
-        
-        if (empty($adresse)) {
-            $erreurs['adresse'] = 'L\'adresse est obligatoire.';
-        }
-        
-        if (empty($ville)) {
-            $erreurs['ville'] = 'La ville est obligatoire.';
-        }
-        
-        if (empty($codePostal)) {
-            $erreurs['code_postal'] = 'Le code postal est obligatoire.';
-        } elseif (!estCodePostalValide($codePostal)) {
-            $erreurs['code_postal'] = 'Le code postal n\'est pas valide.';
-        }
-        
-        if (empty($prix) || $prix <= 0) {
-            $erreurs['prix'] = 'Le prix doit être supérieur à 0.';
-        }
-        
-        if (empty($typeLogement) || !in_array($typeLogement, ['entier', 'collocation', 'libere'])) {
-            $erreurs['type_logement'] = 'Veuillez sélectionner un type de logement valide.';
-        }
-        
-        if ($nbPlaces < 1) {
-            $erreurs['nb_places'] = 'Le nombre de places doit être au moins 1.';
-        }
-        
-        // Validation des dates de disponibilité
-        $disponibilites = [];
-        $erreursDates = false;
-        
-        for ($i = 0; $i < count($datesDebut); $i++) {
-            if (empty($datesDebut[$i]) || empty($datesFin[$i])) {
-                $erreursDates = true;
-                break;
-            }
-            
-            if (!estDateValide($datesDebut[$i]) || !estDateValide($datesFin[$i])) {
-                $erreursDates = true;
-                break;
-            }
-            
-            if (!estPeriodeValide($datesDebut[$i], $datesFin[$i])) {
-                $erreursDates = true;
-                break;
-            }
-            
-            $disponibilites[] = [
-                'date_debut' => $datesDebut[$i],
-                'date_fin' => $datesFin[$i]
-            ];
-        }
-        
-        if (empty($disponibilites) || $erreursDates) {
-            $erreurs['dates'] = 'Veuillez spécifier au moins une période de disponibilité valide.';
-        }
-        
-        // Vérification des coordonnées géographiques
-        if ($latitude == 0 || $longitude == 0) {
-            // Si les coordonnées ne sont pas définies, on essaie de les récupérer via l'API
-            $coordonnees = geocodeAdresse($adresse . ', ' . $codePostal . ' ' . $ville);
-            
-            if ($coordonnees) {
-                $latitude = $coordonnees['latitude'];
-                $longitude = $coordonnees['longitude'];
-            } else {
-                $erreurs['adresse'] = 'Impossible de géolocaliser cette adresse.';
-            }
-        }
-        
-        // S'il y a des erreurs, on les stocke en session
-        if (!empty($erreurs)) {
-            $_SESSION['erreurs_publication'] = $erreurs;
-            $_SESSION['donnees_publication'] = [
-                'titre' => $titre,
-                'description' => $description,
-                'adresse' => $adresse,
-                'ville' => $ville,
-                'code_postal' => $codePostal,
-                'prix' => $prix,
-                'type_logement' => $typeLogement,
-                'nb_places' => $nbPlaces,
-                'disponibilites' => $disponibilites,
-                'latitude' => $latitude,
-                'longitude' => $longitude
-            ];
-            rediriger('publier.php');
-            return;
-        }
-        
-        // Création du logement
-        $donneesLogement = [
-            'id_proprietaire' => $_SESSION['utilisateur_id'],
-            'titre' => $titre,
-            'description' => $description,
-            'adresse' => $adresse,
-            'ville' => $ville,
-            'code_postal' => $codePostal,
-            'latitude' => $latitude,
-            'longitude' => $longitude,
-            'prix' => $prix,
-            'type_logement' => $typeLogement,
-            'nb_places' => $nbPlaces,
-            'disponibilites' => $disponibilites
-        ];
-        
-        $idLogement = $this->logementModel->creer($donneesLogement);
-        
-        if (!$idLogement) {
-            afficherMessage('Une erreur est survenue lors de la publication du logement.', 'erreur');
-            rediriger('publier.php');
-            return;
-        }
-        
-        // Gestion des photos
-        if (isset($_FILES['photos']) && is_array($_FILES['photos']['name'])) {
-            $photoPrincipale = isset($_POST['photo_principale']) ? intval($_POST['photo_principale']) : 0;
-            
-            foreach ($_FILES['photos']['name'] as $i => $nom) {
-                if ($_FILES['photos']['error'][$i] !== UPLOAD_ERR_OK) {
-                    continue;
-                }
-                
-                // Création d'un tableau pour le fichier courant
-                $fichier = [
-                    'name' => $_FILES['photos']['name'][$i],
-                    'type' => $_FILES['photos']['type'][$i],
-                    'tmp_name' => $_FILES['photos']['tmp_name'][$i],
-                    'error' => $_FILES['photos']['error'][$i],
-                    'size' => $_FILES['photos']['size'][$i]
-                ];
-                
-                $resultat = validerFichierImage($fichier);
-                
-                if (!$resultat['valide']) {
-                    continue;
-                }
-                
-                $photoNom = traiterUploadImage($fichier, 'logements');
-                
-                if ($photoNom !== false) {
-                    $this->logementModel->ajouterPhoto($idLogement, $photoNom, $i === $photoPrincipale);
-                }
-            }
-        }
-        
-        afficherMessage('Votre logement a été publié avec succès.', 'succes');
-        rediriger('logement.php?id=' . $idLogement);
+    // Vérifier si la requête est de type POST
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        repondreJSON(['success' => false, 'message' => 'Méthode non autorisée']);
+        return;
     }
     
-    /**
-     * Traite la modification d'un logement
-     */
-    public function modifier() {
-        // Vérification si l'utilisateur est connecté
-        if (!estConnecte()) {
-            afficherMessage('Vous devez être connecté pour modifier un logement.', 'erreur');
-            rediriger('connexion.php');
-            return;
-        }
-        
-        // Récupération de l'ID du logement
-        $idLogement = isset($_GET['id']) ? intval($_GET['id']) : 0;
-        
-        if ($idLogement <= 0) {
-            afficherMessage('Logement introuvable.', 'erreur');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Récupération du logement
-        $logement = $this->logementModel->recupererParId($idLogement);
-        
-        if (!$logement) {
-            afficherMessage('Logement introuvable.', 'erreur');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Vérification des droits
-        if ($logement['id_proprietaire'] != $_SESSION['utilisateur_id'] && !$_SESSION['utilisateur_est_admin']) {
-            afficherMessage('Vous n\'êtes pas autorisé à modifier ce logement.', 'erreur');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Vérification si le formulaire a été soumis
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            return;
-        }
-        
-        // Récupération et nettoyage des données (similaire à publier())
-        $titre = nettoyer($_POST['titre'] ?? '');
-        $description = nettoyer($_POST['description'] ?? '');
-        $adresse = nettoyer($_POST['adresse'] ?? '');
-        $ville = nettoyer($_POST['ville'] ?? '');
-        $codePostal = nettoyer($_POST['code_postal'] ?? '');
-        $prix = floatval($_POST['prix'] ?? 0);
-        $typeLogement = nettoyer($_POST['type_logement'] ?? '');
-        $nbPlaces = intval($_POST['nb_places'] ?? 1);
-        $latitude = floatval($_POST['latitude'] ?? 0);
-        $longitude = floatval($_POST['longitude'] ?? 0);
-        
-        // Validation des données (similaire à publier())
-        // ...
-        
-        // Mise à jour du logement
-        $donneesLogement = [
-            'titre' => $titre,
-            'description' => $description,
-            'adresse' => $adresse,
-            'ville' => $ville,
-            'code_postal' => $codePostal,
-            'latitude' => $latitude,
-            'longitude' => $longitude,
-            'prix' => $prix,
-            'type_logement' => $typeLogement,
-            'nb_places' => $nbPlaces
-        ];
-        
-        $resultat = $this->logementModel->mettreAJour($idLogement, $donneesLogement);
-        
-        if (!$resultat) {
-            afficherMessage('Une erreur est survenue lors de la mise à jour du logement.', 'erreur');
-            rediriger('modifier-logement.php?id=' . $idLogement);
-            return;
-        }
-        
-        // Gestion des disponibilités
-        $this->mettreAJourDisponibilites($idLogement);
-        
-        // Gestion des photos
-        $this->mettreAJourPhotos($idLogement);
-        
-        afficherMessage('Votre logement a été mis à jour avec succès.', 'succes');
-        rediriger('logement.php?id=' . $idLogement);
+    // Récupérer et nettoyer les données du formulaire
+    $titre = isset($_POST['titre']) ? nettoyer($_POST['titre']) : '';
+    $description = isset($_POST['description']) ? nettoyer($_POST['description']) : '';
+    $adresse = isset($_POST['adresse']) ? nettoyer($_POST['adresse']) : '';
+    $ville = isset($_POST['ville']) ? nettoyer($_POST['ville']) : '';
+    $codePostal = isset($_POST['code_postal']) ? nettoyer($_POST['code_postal']) : '';
+    $prix = isset($_POST['prix']) ? floatval($_POST['prix']) : 0;
+    $typeLogement = isset($_POST['type_logement']) ? nettoyer($_POST['type_logement']) : '';
+    $nbPlaces = isset($_POST['nb_places']) ? intval($_POST['nb_places']) : 1;
+    $latitude = isset($_POST['latitude']) ? floatval($_POST['latitude']) : null;
+    $longitude = isset($_POST['longitude']) ? floatval($_POST['longitude']) : null;
+    $dateDebut = isset($_POST['date_debut']) ? nettoyer($_POST['date_debut']) : '';
+    $dateFin = isset($_POST['date_fin']) ? nettoyer($_POST['date_fin']) : '';
+    
+    // Récupérer l'ID de l'utilisateur connecté
+    $idProprietaire = $_SESSION['utilisateur_id'];
+    
+    // Valider les données
+    $erreurs = [];
+    
+    if (empty($titre)) {
+        $erreurs[] = 'Le titre est requis';
     }
     
-    /**
-     * Traite la suppression d'un logement
-     */
-    public function supprimer() {
-        // Vérification si l'utilisateur est connecté
-        if (!estConnecte()) {
-            afficherMessage('Vous devez être connecté pour supprimer un logement.', 'erreur');
-            rediriger('connexion.php');
-            return;
-        }
-        
-        // Récupération de l'ID du logement
-        $idLogement = isset($_GET['id']) ? intval($_GET['id']) : 0;
-        
-        if ($idLogement <= 0) {
-            afficherMessage('Logement introuvable.', 'erreur');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Récupération du logement
-        $logement = $this->logementModel->recupererParId($idLogement);
-        
-        if (!$logement) {
-            afficherMessage('Logement introuvable.', 'erreur');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Vérification des droits
-        if ($logement['id_proprietaire'] != $_SESSION['utilisateur_id'] && !$_SESSION['utilisateur_est_admin']) {
-            afficherMessage('Vous n\'êtes pas autorisé à supprimer ce logement.', 'erreur');
-            rediriger('index.php');
-            return;
-        }
-        
-        // Vérification s'il n'y a pas de réservations en cours
-        if ($this->logementModel->aReservationsEnCours($idLogement)) {
-            afficherMessage('Impossible de supprimer ce logement car il a des réservations en cours.', 'erreur');
-            rediriger('logement.php?id=' . $idLogement);
-            return;
-        }
-        
-        // Suppression du logement
-        $resultat = $this->logementModel->supprimer($idLogement);
-        
-        if (!$resultat) {
-            afficherMessage('Une erreur est survenue lors de la suppression du logement.', 'erreur');
-            rediriger('logement.php?id=' . $idLogement);
-            return;
-        }
-        
-        // Suppression des photos
-        $photos = $this->logementModel->recupererPhotos($idLogement);
-        
-        foreach ($photos as $photo) {
-            $cheminPhoto = ROOT_PATH . 'uploads/logements/' . $photo['url'];
-            
-            if (file_exists($cheminPhoto)) {
-                unlink($cheminPhoto);
-            }
-        }
-        
-        afficherMessage('Votre logement a été supprimé avec succès.', 'succes');
-        rediriger('profil.php');
+    if (empty($description)) {
+        $erreurs[] = 'La description est requise';
     }
     
-    /**
-     * Récupère les détails d'un logement
-     * @param int $id ID du logement
-     * @return array|boolean Données du logement ou false
-     */
-    public function detailler($id) {
-        $id = intval($id);
-        
-        if ($id <= 0) {
-            return false;
-        }
-        
-        // Récupération du logement
-        $logement = $this->logementModel->recupererParId($id);
-        
-        if (!$logement) {
-            return false;
-        }
-        
-        // Récupération des photos
-        $logement['photos'] = $this->logementModel->recupererPhotos($id);
-        
-        // Récupération des disponibilités
-        $logement['disponibilites'] = $this->logementModel->recupererDisponibilites($id);
-        
-        return $logement;
+    if (empty($adresse)) {
+        $erreurs[] = 'L\'adresse est requise';
     }
     
-    /**
-     * Récupère les disponibilités d'un logement formatées pour un calendrier
-     * @param int $id ID du logement
-     * @return array Disponibilités formatées
-     */
-    public function recupererDisponibilitesCalendrier($id) {
-        $disponibilites = $this->logementModel->recupererDisponibilites($id);
-        $reservations = $this->logementModel->recupererReservationsAcceptees($id);
-        
-        $evenements = [];
-        
-        // Ajouter les disponibilités
-        foreach ($disponibilites as $dispo) {
-            $evenements[] = [
-                'title' => 'Disponible',
-                'start' => $dispo['date_debut'],
-                'end' => date('Y-m-d', strtotime($dispo['date_fin'] . ' +1 day')),
-                'color' => '#4CAF50',
-                'type' => 'disponibilite',
-                'id' => $dispo['id']
-            ];
-        }
-        
-        // Ajouter les réservations
-        foreach ($reservations as $reservation) {
-            $evenements[] = [
-                'title' => 'Réservé',
-                'start' => $reservation['date_debut'],
-                'end' => date('Y-m-d', strtotime($reservation['date_fin'] . ' +1 day')),
-                'color' => '#F44336',
-                'type' => 'reservation',
-                'id' => $reservation['id']
-            ];
-        }
-        
-        return $evenements;
+    if (empty($ville)) {
+        $erreurs[] = 'La ville est requise';
     }
     
-    /**
-     * Met à jour les disponibilités d'un logement
-     * @param int $idLogement ID du logement
-     * @return boolean Résultat de l'opération
-     */
-    private function mettreAJourDisponibilites($idLogement) {
-        // Récupération des données
-        $datesDebut = $_POST['dates_debut'] ?? [];
-        $datesFin = $_POST['dates_fin'] ?? [];
-        $idsDisponibilite = $_POST['ids_disponibilite'] ?? [];
-        
-        // Supprimer les disponibilités existantes qui ne sont pas dans la liste
-        $this->logementModel->supprimerDisponibilitesNonListees($idLogement, $idsDisponibilite);
-        
-        // Traiter les disponibilités
-        for ($i = 0; $i < count($datesDebut); $i++) {
-            if (empty($datesDebut[$i]) || empty($datesFin[$i])) {
-                continue;
-            }
-            
-            if (!estDateValide($datesDebut[$i]) || !estDateValide($datesFin[$i])) {
-                continue;
-            }
-            
-            if (!estPeriodeValide($datesDebut[$i], $datesFin[$i])) {
-                continue;
-            }
-            
-            $disponibilite = [
-                'date_debut' => $datesDebut[$i],
-                'date_fin' => $datesFin[$i]
-            ];
-            
-            // Si on a un ID, c'est une mise à jour
-            if (isset($idsDisponibilite[$i]) && !empty($idsDisponibilite[$i])) {
-                $this->logementModel->mettreAJourDisponibilite(
-                    $idsDisponibilite[$i],
-                    $disponibilite['date_debut'],
-                    $disponibilite['date_fin']
-                );
-            } else {
-                // Sinon, c'est une création
-                $this->logementModel->ajouterDisponibilite(
-                    $idLogement,
-                    $disponibilite['date_debut'],
-                    $disponibilite['date_fin']
-                );
-            }
-        }
-        
-        return true;
+    if (empty($codePostal)) {
+        $erreurs[] = 'Le code postal est requis';
+    } elseif (!preg_match('/^[0-9]{5}$/', $codePostal)) {
+        $erreurs[] = 'Format de code postal invalide';
     }
     
-    /**
-     * Met à jour les photos d'un logement
-     * @param int $idLogement ID du logement
-     * @return boolean Résultat de l'opération
-     */
-    private function mettreAJourPhotos($idLogement) {
-        // Si on a des photos à supprimer
-        if (isset($_POST['photos_supprimer']) && is_array($_POST['photos_supprimer'])) {
-            foreach ($_POST['photos_supprimer'] as $idPhoto) {
-                $photo = $this->logementModel->recupererPhoto($idPhoto);
-                
-                if ($photo && $photo['id_logement'] == $idLogement) {
-                    $cheminPhoto = ROOT_PATH . 'uploads/logements/' . $photo['url'];
-                    
-                    if (file_exists($cheminPhoto)) {
-                        unlink($cheminPhoto);
-                    }
-                    
-                    $this->logementModel->supprimerPhoto($idPhoto);
-                }
-            }
-        }
-        
-        // Si on a une nouvelle photo principale
-        if (isset($_POST['photo_principale']) && !empty($_POST['photo_principale'])) {
-            $idPhotoPrincipale = intval($_POST['photo_principale']);
-            $this->logementModel->definirPhotoPrincipale($idLogement, $idPhotoPrincipale);
-        }
-        
-        // Si on a de nouvelles photos
-        if (isset($_FILES['photos']) && is_array($_FILES['photos']['name'])) {
-            $nouvellePrincipale = isset($_POST['nouvelle_photo_principale']) ? intval($_POST['nouvelle_photo_principale']) : -1;
-            
-            foreach ($_FILES['photos']['name'] as $i => $nom) {
-                if ($_FILES['photos']['error'][$i] !== UPLOAD_ERR_OK) {
-                    continue;
-                }
-                
-                // Création d'un tableau pour le fichier courant
-                $fichier = [
-                    'name' => $_FILES['photos']['name'][$i],
-                    'type' => $_FILES['photos']['type'][$i],
-                    'tmp_name' => $_FILES['photos']['tmp_name'][$i],
-                    'error' => $_FILES['photos']['error'][$i],
-                    'size' => $_FILES['photos']['size'][$i]
-                ];
-                
-                $resultat = validerFichierImage($fichier);
-                
-                if (!$resultat['valide']) {
-                    continue;
-                }
-                
-                $photoNom = traiterUploadImage($fichier, 'logements');
-                
-                if ($photoNom !== false) {
-                    $estPrincipale = ($i === $nouvellePrincipale);
-                    $this->logementModel->ajouterPhoto($idLogement, $photoNom, $estPrincipale);
-                }
-            }
-        }
-        
-        return true;
+    if ($prix <= 0) {
+        $erreurs[] = 'Le prix doit être supérieur à 0';
     }
+    
+    if (empty($typeLogement)) {
+        $erreurs[] = 'Le type de logement est requis';
+    } elseif (!in_array($typeLogement, ['entier', 'collocation', 'libere'])) {
+        $erreurs[] = 'Type de logement invalide';
+    }
+    
+    if ($nbPlaces <= 0) {
+        $erreurs[] = 'Le nombre de places doit être supérieur à 0';
+    }
+    
+    if (empty($dateDebut)) {
+        $erreurs[] = 'La date de début est requise';
+    } elseif (!validateDate($dateDebut)) {
+        $erreurs[] = 'Format de date de début invalide';
+    }
+    
+    if (empty($dateFin)) {
+        $erreurs[] = 'La date de fin est requise';
+    } elseif (!validateDate($dateFin)) {
+        $erreurs[] = 'Format de date de fin invalide';
+    }
+    
+    if (validateDate($dateDebut) && validateDate($dateFin) && strtotime($dateDebut) >= strtotime($dateFin)) {
+        $erreurs[] = 'La date de fin doit être postérieure à la date de début';
+    }
+    
+    // Si des erreurs sont présentes, renvoyer une réponse d'erreur
+    if (!empty($erreurs)) {
+        repondreJSON(['success' => false, 'erreurs' => $erreurs]);
+        return;
+    }
+    
+    // Si latitude et longitude ne sont pas fournies, utiliser l'API Google Maps pour les obtenir
+    if ($latitude === null || $longitude === null) {
+        $adresseComplete = $adresse . ', ' . $codePostal . ' ' . $ville . ', France';
+        $coordonnees = geocoderAdresse($adresseComplete);
+        
+        if ($coordonnees) {
+            $latitude = $coordonnees['lat'];
+            $longitude = $coordonnees['lng'];
+        } else {
+            repondreJSON(['success' => false, 'message' => 'Impossible de géocoder l\'adresse']);
+            return;
+        }
+    }
+    
+    // Créer le logement
+    $donnees = [
+        'id_proprietaire' => $idProprietaire,
+        'titre' => $titre,
+        'description' => $description,
+        'adresse' => $adresse,
+        'ville' => $ville,
+        'code_postal' => $codePostal,
+        'prix' => $prix,
+        'type_logement' => $typeLogement,
+        'nb_places' => $nbPlaces,
+        'latitude' => $latitude,
+        'longitude' => $longitude
+    ];
+    
+    $idLogement = creerLogement($donnees);
+    
+    if (!$idLogement) {
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de la création du logement']);
+        return;
+    }
+    
+    // Ajouter la disponibilité
+    $disponibilite = [
+        'id_logement' => $idLogement,
+        'date_debut' => $dateDebut,
+        'date_fin' => $dateFin
+    ];
+    
+    $idDisponibilite = creerDisponibilite($disponibilite);
+    
+    if (!$idDisponibilite) {
+        // Supprimer le logement en cas d'erreur
+        supprimerLogement($idLogement);
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de l\'ajout de la disponibilité']);
+        return;
+    }
+    
+    // Répondre avec succès
+    repondreJSON([
+        'success' => true,
+        'message' => 'Logement publié avec succès',
+        'id_logement' => $idLogement
+    ]);
+}
+
+/**
+ * Gère la modification d'un logement
+ */
+function actionModifierLogement() {
+    // Vérifier si l'utilisateur est connecté
+    if (!estConnecte()) {
+        repondreJSON(['success' => false, 'message' => 'Vous devez être connecté pour modifier un logement']);
+        return;
+    }
+    
+    // Vérifier si la requête est de type POST
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        repondreJSON(['success' => false, 'message' => 'Méthode non autorisée']);
+        return;
+    }
+    
+    // Récupérer l'ID du logement
+    $idLogement = isset($_POST['id_logement']) ? intval($_POST['id_logement']) : 0;
+    
+    if ($idLogement <= 0) {
+        repondreJSON(['success' => false, 'message' => 'ID de logement invalide']);
+        return;
+    }
+    
+    // Récupérer le logement
+    $logement = recupererLogementParId($idLogement);
+    
+    if (!$logement) {
+        repondreJSON(['success' => false, 'message' => 'Logement non trouvé']);
+        return;
+    }
+    
+    // Vérifier que l'utilisateur est le propriétaire du logement ou un administrateur
+    $idUtilisateur = $_SESSION['utilisateur_id'];
+    
+    if ($logement['id_proprietaire'] != $idUtilisateur && !estAdmin()) {
+        repondreJSON(['success' => false, 'message' => 'Vous n\'êtes pas autorisé à modifier ce logement']);
+        return;
+    }
+    
+    // Récupérer et nettoyer les données du formulaire
+    $titre = isset($_POST['titre']) ? nettoyer($_POST['titre']) : $logement['titre'];
+    $description = isset($_POST['description']) ? nettoyer($_POST['description']) : $logement['description'];
+    $adresse = isset($_POST['adresse']) ? nettoyer($_POST['adresse']) : $logement['adresse'];
+    $ville = isset($_POST['ville']) ? nettoyer($_POST['ville']) : $logement['ville'];
+    $codePostal = isset($_POST['code_postal']) ? nettoyer($_POST['code_postal']) : $logement['code_postal'];
+    $prix = isset($_POST['prix']) ? floatval($_POST['prix']) : $logement['prix'];
+    $typeLogement = isset($_POST['type_logement']) ? nettoyer($_POST['type_logement']) : $logement['type_logement'];
+    $nbPlaces = isset($_POST['nb_places']) ? intval($_POST['nb_places']) : $logement['nb_places'];
+    $latitude = isset($_POST['latitude']) ? floatval($_POST['latitude']) : $logement['latitude'];
+    $longitude = isset($_POST['longitude']) ? floatval($_POST['longitude']) : $logement['longitude'];
+    
+    // Valider les données
+    $erreurs = [];
+    
+    if (empty($titre)) {
+        $erreurs[] = 'Le titre est requis';
+    }
+    
+    if (empty($description)) {
+        $erreurs[] = 'La description est requise';
+    }
+    
+    if (empty($adresse)) {
+        $erreurs[] = 'L\'adresse est requise';
+    }
+    
+    if (empty($ville)) {
+        $erreurs[] = 'La ville est requise';
+    }
+    
+    if (empty($codePostal)) {
+        $erreurs[] = 'Le code postal est requis';
+    } elseif (!preg_match('/^[0-9]{5}$/', $codePostal)) {
+        $erreurs[] = 'Format de code postal invalide';
+    }
+    
+    if ($prix <= 0) {
+        $erreurs[] = 'Le prix doit être supérieur à 0';
+    }
+    
+    if (empty($typeLogement)) {
+        $erreurs[] = 'Le type de logement est requis';
+    } elseif (!in_array($typeLogement, ['entier', 'collocation', 'libere'])) {
+        $erreurs[] = 'Type de logement invalide';
+    }
+    
+    if ($nbPlaces <= 0) {
+        $erreurs[] = 'Le nombre de places doit être supérieur à 0';
+    }
+    
+    // Si des erreurs sont présentes, renvoyer une réponse d'erreur
+    if (!empty($erreurs)) {
+        repondreJSON(['success' => false, 'erreurs' => $erreurs]);
+        return;
+    }
+    
+    // Vérifier si l'adresse a été modifiée
+    $adresseModifiee = $adresse !== $logement['adresse'] || 
+                      $ville !== $logement['ville'] || 
+                      $codePostal !== $logement['code_postal'];
+    
+    // Si l'adresse a été modifiée, mettre à jour les coordonnées
+    if ($adresseModifiee) {
+        $adresseComplete = $adresse . ', ' . $codePostal . ' ' . $ville . ', France';
+        $coordonnees = geocoderAdresse($adresseComplete);
+        
+        if ($coordonnees) {
+            $latitude = $coordonnees['lat'];
+            $longitude = $coordonnees['lng'];
+        } else {
+            repondreJSON(['success' => false, 'message' => 'Impossible de géocoder l\'adresse']);
+            return;
+        }
+    }
+    
+    // Mettre à jour le logement
+    $donnees = [
+        'titre' => $titre,
+        'description' => $description,
+        'adresse' => $adresse,
+        'ville' => $ville,
+        'code_postal' => $codePostal,
+        'prix' => $prix,
+        'type_logement' => $typeLogement,
+        'nb_places' => $nbPlaces,
+        'latitude' => $latitude,
+        'longitude' => $longitude
+    ];
+    
+    $resultat = modifierLogement($idLogement, $donnees);
+    
+    if (!$resultat) {
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de la modification du logement']);
+        return;
+    }
+    
+    // Répondre avec succès
+    repondreJSON([
+        'success' => true,
+        'message' => 'Logement modifié avec succès'
+    ]);
+}
+
+/**
+ * Gère la suppression d'un logement
+ */
+function actionSupprimerLogement() {
+    // Vérifier si l'utilisateur est connecté
+    if (!estConnecte()) {
+        repondreJSON(['success' => false, 'message' => 'Vous devez être connecté pour supprimer un logement']);
+        return;
+    }
+    
+    // Vérifier si la requête est de type POST
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        repondreJSON(['success' => false, 'message' => 'Méthode non autorisée']);
+        return;
+    }
+    
+    // Récupérer l'ID du logement
+    $idLogement = isset($_POST['id_logement']) ? intval($_POST['id_logement']) : 0;
+    
+    if ($idLogement <= 0) {
+        repondreJSON(['success' => false, 'message' => 'ID de logement invalide']);
+        return;
+    }
+    
+    // Récupérer le logement
+    $logement = recupererLogementParId($idLogement);
+    
+    if (!$logement) {
+        repondreJSON(['success' => false, 'message' => 'Logement non trouvé']);
+        return;
+    }
+    
+    // Vérifier que l'utilisateur est le propriétaire du logement ou un administrateur
+    $idUtilisateur = $_SESSION['utilisateur_id'];
+    
+    if ($logement['id_proprietaire'] != $idUtilisateur && !estAdmin()) {
+        repondreJSON(['success' => false, 'message' => 'Vous n\'êtes pas autorisé à supprimer ce logement']);
+        return;
+    }
+    
+    // Vérifier si le logement a des réservations en cours
+    if (logementAReservationsEnCours($idLogement)) {
+        repondreJSON(['success' => false, 'message' => 'Impossible de supprimer ce logement car il a des réservations en cours']);
+        return;
+    }
+    
+    // Récupérer toutes les photos du logement
+    $photos = recupererPhotosLogement($idLogement);
+    
+    // Supprimer le logement
+    $resultat = supprimerLogement($idLogement);
+    
+    if (!$resultat) {
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de la suppression du logement']);
+        return;
+    }
+    
+    // Supprimer les fichiers photos
+    foreach ($photos as $photo) {
+        if (file_exists(CHEMIN_RACINE . $photo['url'])) {
+            unlink(CHEMIN_RACINE . $photo['url']);
+        }
+    }
+    
+    // Répondre avec succès
+    repondreJSON(['success' => true, 'message' => 'Logement supprimé avec succès']);
+}
+
+/**
+ * Récupère les informations d'un logement
+ */
+function actionRecupererLogement() {
+    // Récupérer l'ID du logement
+    $idLogement = isset($_GET['id_logement']) ? intval($_GET['id_logement']) : 0;
+    
+    if ($idLogement <= 0) {
+        repondreJSON(['success' => false, 'message' => 'ID de logement invalide']);
+        return;
+    }
+    
+    // Récupérer le logement
+    $logement = recupererLogementParId($idLogement);
+    
+    if (!$logement) {
+        repondreJSON(['success' => false, 'message' => 'Logement non trouvé']);
+        return;
+    }
+    
+    // Récupérer les disponibilités du logement
+    $disponibilites = recupererDisponibilitesLogement($idLogement);
+    
+    // Récupérer les photos du logement
+    $photos = recupererPhotosLogement($idLogement);
+    
+    // Récupérer les informations du propriétaire
+    $proprietaire = recupererUtilisateurParId($logement['id_proprietaire']);
+    
+    // Préparer les données à renvoyer
+    $donnees = [
+        'logement' => $logement,
+        'disponibilites' => $disponibilites,
+        'photos' => $photos,
+        'proprietaire' => [
+            'id' => $proprietaire['id'],
+            'nom' => $proprietaire['nom'],
+            'prenom' => $proprietaire['prenom'],
+            'photo_profil' => $proprietaire['photo_profil']
+        ]
+    ];
+    
+    // Répondre avec succès
+    repondreJSON(['success' => true, 'data' => $donnees]);
+}
+
+/**
+ * Récupère tous les logements
+ */
+function actionRecupererTousLogements() {
+    // Paramètres de filtrage
+    $filtres = [];
+    
+    // Filtrer par ville
+    if (isset($_GET['ville']) && !empty($_GET['ville'])) {
+        $filtres['ville'] = nettoyer($_GET['ville']);
+    }
+    
+    // Filtrer par type de logement
+    if (isset($_GET['type_logement']) && !empty($_GET['type_logement'])) {
+        $filtres['type_logement'] = nettoyer($_GET['type_logement']);
+    }
+    
+    // Filtrer par prix minimum
+    if (isset($_GET['prix_min']) && is_numeric($_GET['prix_min'])) {
+        $filtres['prix_min'] = floatval($_GET['prix_min']);
+    }
+    
+    // Filtrer par prix maximum
+    if (isset($_GET['prix_max']) && is_numeric($_GET['prix_max'])) {
+        $filtres['prix_max'] = floatval($_GET['prix_max']);
+    }
+    
+    // Filtrer par nombre de places
+    if (isset($_GET['nb_places']) && is_numeric($_GET['nb_places'])) {
+        $filtres['nb_places'] = intval($_GET['nb_places']);
+    }
+    
+    // Filtrer par disponibilité
+    if (isset($_GET['date_debut']) && !empty($_GET['date_debut']) && isset($_GET['date_fin']) && !empty($_GET['date_fin'])) {
+        $dateDebut = nettoyer($_GET['date_debut']);
+        $dateFin = nettoyer($_GET['date_fin']);
+        
+        if (validateDate($dateDebut) && validateDate($dateFin) && strtotime($dateDebut) < strtotime($dateFin)) {
+            $filtres['date_debut'] = $dateDebut;
+            $filtres['date_fin'] = $dateFin;
+        }
+    }
+    
+    // Récupérer les logements
+    $logements = recupererLogements($filtres);
+    
+    // Ajouter la photo principale pour chaque logement
+    foreach ($logements as &$logement) {
+        $photos = recupererPhotosLogement($logement['id']);
+        $logement['photo_principale'] = !empty($photos) ? $photos[0]['url'] : null;
+    }
+    
+    // Répondre avec succès
+    repondreJSON(['success' => true, 'logements' => $logements]);
+}
+
+/**
+ * Gère l'upload d'une photo pour un logement
+ */
+function actionUploadPhoto() {
+    // Vérifier si l'utilisateur est connecté
+    if (!estConnecte()) {
+        repondreJSON(['success' => false, 'message' => 'Vous devez être connecté pour ajouter une photo']);
+        return;
+    }
+    
+    // Vérifier si la requête est de type POST
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        repondreJSON(['success' => false, 'message' => 'Méthode non autorisée']);
+        return;
+    }
+    
+    // Récupérer l'ID du logement
+    $idLogement = isset($_POST['id_logement']) ? intval($_POST['id_logement']) : 0;
+    
+    if ($idLogement <= 0) {
+        repondreJSON(['success' => false, 'message' => 'ID de logement invalide']);
+        return;
+    }
+    
+    // Récupérer le logement
+    $logement = recupererLogementParId($idLogement);
+    
+    if (!$logement) {
+        repondreJSON(['success' => false, 'message' => 'Logement non trouvé']);
+        return;
+    }
+    
+    // Vérifier que l'utilisateur est le propriétaire du logement ou un administrateur
+    $idUtilisateur = $_SESSION['utilisateur_id'];
+    
+    if ($logement['id_proprietaire'] != $idUtilisateur && !estAdmin()) {
+        repondreJSON(['success' => false, 'message' => 'Vous n\'êtes pas autorisé à ajouter une photo à ce logement']);
+        return;
+    }
+    
+    // Vérifier si un fichier a été uploadé
+    if (!isset($_FILES['photo']) || $_FILES['photo']['error'] !== UPLOAD_ERR_OK) {
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de l\'upload du fichier']);
+        return;
+    }
+    
+    // Vérifier le type de fichier
+    $fichier = $_FILES['photo'];
+    $typesFichierAutorises = ['image/jpeg', 'image/png', 'image/gif'];
+    
+    if (!in_array($fichier['type'], $typesFichierAutorises)) {
+        repondreJSON(['success' => false, 'message' => 'Type de fichier non autorisé. Seuls les formats JPEG, PNG et GIF sont acceptés']);
+        return;
+    }
+    
+    // Vérifier la taille du fichier (max 2MB)
+    if ($fichier['size'] > 2 * 1024 * 1024) {
+        repondreJSON(['success' => false, 'message' => 'Le fichier est trop volumineux. Taille maximale: 2MB']);
+        return;
+    }
+    
+    // Créer le répertoire d'upload si nécessaire
+    if (!file_exists(CHEMIN_UPLOADS_LOGEMENTS)) {
+        mkdir(CHEMIN_UPLOADS_LOGEMENTS, 0755, true);
+    }
+    
+    // Générer un nom unique pour le fichier
+    $extension = pathinfo($fichier['name'], PATHINFO_EXTENSION);
+    $nomFichier = 'logement_' . $idLogement . '_' . time() . '.' . $extension;
+    $cheminFichier = CHEMIN_UPLOADS_LOGEMENTS . '/' . $nomFichier;
+    
+    // Déplacer le fichier uploadé
+    if (!move_uploaded_file($fichier['tmp_name'], $cheminFichier)) {
+        repondreJSON(['success' => false, 'message' => 'Erreur lors du déplacement du fichier']);
+        return;
+    }
+    
+    // Déterminer si c'est la photo principale
+    $estPrincipale = isset($_POST['est_principale']) && $_POST['est_principale'] === 'true';
+    
+    // Ajouter la photo dans la base de données
+    $cheminRelatif = '/uploads/logements/' . $nomFichier;
+    $idPhoto = ajouterPhotoLogement($idLogement, $cheminRelatif, $estPrincipale);
+    
+    if (!$idPhoto) {
+        // Supprimer le fichier en cas d'erreur
+        unlink($cheminFichier);
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de l\'ajout de la photo']);
+        return;
+    }
+    
+    // Répondre avec succès
+    repondreJSON([
+        'success' => true,
+        'message' => 'Photo ajoutée avec succès',
+        'photo' => [
+            'id' => $idPhoto,
+            'url' => $cheminRelatif,
+            'est_principale' => $estPrincipale
+        ]
+    ]);
+}
+
+/**
+ * Gère la suppression d'une photo de logement
+ */
+function actionSupprimerPhoto() {
+    // Vérifier si l'utilisateur est connecté
+    if (!estConnecte()) {
+        repondreJSON(['success' => false, 'message' => 'Vous devez être connecté pour supprimer une photo']);
+        return;
+    }
+    
+    // Vérifier si la requête est de type POST
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        repondreJSON(['success' => false, 'message' => 'Méthode non autorisée']);
+        return;
+    }
+    
+    // Récupérer l'ID de la photo
+    $idPhoto = isset($_POST['id_photo']) ? intval($_POST['id_photo']) : 0;
+    
+    if ($idPhoto <= 0) {
+        repondreJSON(['success' => false, 'message' => 'ID de photo invalide']);
+        return;
+    }
+    
+    // Récupérer la photo
+    $photo = recupererPhotoParId($idPhoto);
+    
+    if (!$photo) {
+        repondreJSON(['success' => false, 'message' => 'Photo non trouvée']);
+        return;
+    }
+    
+    // Récupérer le logement
+    $logement = recupererLogementParId($photo['id_logement']);
+    
+    // Vérifier que l'utilisateur est le propriétaire du logement ou un administrateur
+    $idUtilisateur = $_SESSION['utilisateur_id'];
+    
+    if ($logement['id_proprietaire'] != $idUtilisateur && !estAdmin()) {
+        repondreJSON(['success' => false, 'message' => 'Vous n\'êtes pas autorisé à supprimer cette photo']);
+        return;
+    }
+    
+    // Supprimer la photo
+    $resultat = supprimerPhoto($idPhoto);
+    
+    if (!$resultat) {
+        repondreJSON(['success' => false, 'message' => 'Erreur lors de la suppression de la photo']);
+        return;
+    }
+    
+    // Supprimer le fichier
+    if (file_exists(CHEMIN_RACINE . $photo['url'])) {
+        unlink(CHEMIN_RACINE . $photo['url']);
+    }
+    
+    // Si c'était la photo principale, définir une autre photo comme principale
+    if ($photo['est_principale']) {
+        $autresPhotos = recupererPhotosLogement($photo['id_logement']);
+        
+        if (!empty($autresPhotos)) {
+            definirPhotoPrincipale($autresPhotos[0]['id']);
+        }
+    }
+    
+    // Répondre avec succès
+    repondreJSON(['success' => true, 'message' => 'Photo supprimée avec succès']);
+}
+
+/**
+ * Vérifie si une date est valide
+ * 
+ * @param string $date Date à vérifier (format Y-m-d)
+ * @return boolean True si la date est valide, false sinon
+ */
+function validateDate($date) {
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    return $d && $d->format('Y-m-d') === $date;
+}
+
+/**
+ * Renvoie une réponse JSON et termine le script
+ * 
+ * @param array $donnees Données à renvoyer
+ */
+function repondreJSON($donnees) {
+    header('Content-Type: application/json');
+    echo json_encode($donnees);
+    exit;
 }
 ?>
