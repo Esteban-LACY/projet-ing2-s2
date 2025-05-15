@@ -1,74 +1,191 @@
 <?php
-require_once '../config/config.php';
-require_once 'fonctions.php';
+/**
+ * Fonctions d'authentification et de gestion des sessions
+ * 
+ * Ce fichier contient des fonctions pour gérer l'authentification des utilisateurs
+ * 
+ * @author OmnesBnB
+ */
+
+// Inclusion du fichier de configuration
+require_once __DIR__ . '/../config/config.php';
+require_once CHEMIN_MODELES . '/utilisateur.php';
 
 /**
- * Hachage sécurisé d'un mot de passe
- * @param string $motDePasse Mot de passe en clair
- * @return string Mot de passe haché
+ * Démarre la session si elle n'est pas déjà démarrée
+ * 
+ * @return void
  */
-function hacherMotDePasse($motDePasse) {
+function demarrerSession() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+}
+
+/**
+ * Connecte un utilisateur et crée sa session
+ * 
+ * @param array $utilisateur Données de l'utilisateur
+ * @return void
+ */
+function connecterUtilisateur($utilisateur) {
+    demarrerSession();
+    
+    $_SESSION['utilisateur_id'] = $utilisateur['id'];
+    $_SESSION['utilisateur_nom'] = $utilisateur['nom'];
+    $_SESSION['utilisateur_prenom'] = $utilisateur['prenom'];
+    $_SESSION['utilisateur_email'] = $utilisateur['email'];
+    $_SESSION['est_admin'] = $utilisateur['est_admin'] == 1;
+    
+    // Mettre à jour la date de dernière connexion
+    majDerniereConnexion($utilisateur['id']);
+    
+    // Générer un nouveau token CSRF
+    genererToken();
+}
+
+/**
+ * Déconnecte l'utilisateur actuel
+ * 
+ * @return void
+ */
+function deconnecterUtilisateur() {
+    demarrerSession();
+    
+    // Détruire toutes les variables de session
+    $_SESSION = [];
+    
+    // Détruire le cookie de session si nécessaire
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params['path'],
+            $params['domain'],
+            $params['secure'],
+            $params['httponly']
+        );
+    }
+    
+    // Détruire la session
+    session_destroy();
+}
+
+/**
+ * Vérifie si l'utilisateur est connecté
+ * 
+ * @return bool True si l'utilisateur est connecté, false sinon
+ */
+function estConnecte() {
+    demarrerSession();
+    
+    return isset($_SESSION['utilisateur_id']) && !empty($_SESSION['utilisateur_id']);
+}
+
+/**
+ * Vérifie si l'utilisateur est administrateur
+ * 
+ * @return bool True si l'utilisateur est administrateur, false sinon
+ */
+function estAdmin() {
+    demarrerSession();
+    
+    return estConnecte() && isset($_SESSION['est_admin']) && $_SESSION['est_admin'] === true;
+}
+
+/**
+ * Authentifie un utilisateur avec son email et son mot de passe
+ * 
+ * @param string $email Email de l'utilisateur
+ * @param string $motDePasse Mot de passe de l'utilisateur
+ * @return array|false Données de l'utilisateur si authentification réussie, false sinon
+ */
+function authentifierUtilisateur($email, $motDePasse) {
+    // Récupérer l'utilisateur par son email
+    $utilisateur = recupererUtilisateurParEmail($email);
+    
+    if (!$utilisateur) {
+        return false;
+    }
+    
+    // Vérifier le mot de passe
+    if (!password_verify($motDePasse, $utilisateur['mot_de_passe'])) {
+        return false;
+    }
+    
+    // Vérifier si l'email est vérifié
+    if (!$utilisateur['est_verifie']) {
+        return false;
+    }
+    
+    return $utilisateur;
+}
+
+/**
+ * Récupère l'utilisateur actuellement connecté
+ * 
+ * @return array|false Données de l'utilisateur si connecté, false sinon
+ */
+function recupererUtilisateurConnecte() {
+    if (!estConnecte()) {
+        return false;
+    }
+    
+    return recupererUtilisateurParId($_SESSION['utilisateur_id']);
+}
+
+/**
+ * Vérifie si l'utilisateur connecté a accès à une page restreinte
+ * 
+ * @param string $niveau Niveau d'accès requis ('utilisateur' ou 'admin')
+ * @param string $redirection URL de redirection en cas d'accès non autorisé
+ * @return bool True si l'utilisateur a accès, redirection sinon
+ */
+function verifierAcces($niveau = 'utilisateur', $redirection = '/connexion.php') {
+    if ($niveau === 'admin' && !estAdmin()) {
+        // Rediriger les non-administrateurs
+        rediriger(URL_SITE . $redirection);
+        return false;
+    } elseif ($niveau === 'utilisateur' && !estConnecte()) {
+        // Rediriger les utilisateurs non connectés
+        rediriger(URL_SITE . $redirection);
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Régénère l'ID de session pour éviter les attaques de fixation de session
+ * 
+ * @return void
+ */
+function regenererSession() {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
+}
+
+/**
+ * Génère un hash pour un mot de passe
+ * 
+ * @param string $motDePasse Mot de passe à hacher
+ * @return string Hash du mot de passe
+ */
+function genererHashMotDePasse($motDePasse) {
     return password_hash($motDePasse, PASSWORD_DEFAULT);
 }
 
 /**
- * Vérifie un mot de passe
- * @param string $motDePasse Mot de passe en clair
- * @param string $hash Hash stocké
- * @return bool Résultat de la vérification
+ * Vérifie si un mot de passe correspond à un hash
+ * 
+ * @param string $motDePasse Mot de passe à vérifier
+ * @param string $hash Hash du mot de passe
+ * @return bool True si le mot de passe correspond, false sinon
  */
 function verifierMotDePasse($motDePasse, $hash) {
     return password_verify($motDePasse, $hash);
-}
-
-/**
- * Authentifie un utilisateur
- * @param object $utilisateur Données utilisateur
- */
-function authentifier($utilisateur) {
-    $_SESSION['utilisateur_id'] = $utilisateur['id'];
-    $_SESSION['utilisateur_email'] = $utilisateur['email'];
-    $_SESSION['utilisateur_nom'] = $utilisateur['nom'];
-    $_SESSION['utilisateur_prenom'] = $utilisateur['prenom'];
-    $_SESSION['est_admin'] = $utilisateur['est_admin'];
-    $_SESSION['est_verifie'] = $utilisateur['est_verifie'];
-    
-    // Mettre à jour la dernière connexion
-    require_once MODELS_PATH . 'utilisateur.php';
-    $utilisateurModel = new UtilisateurModel();
-    $utilisateurModel->mettreAJourDerniereConnexion($utilisateur['id']);
-}
-
-/**
- * Déconnecte l'utilisateur
- */
-function deconnecter() {
-    session_unset();
-    session_destroy();
-    session_start();
-}
-
-/**
- * Vérifie si l'utilisateur a accès à une page
- * Redirige si non autorisé
- * @param bool $connexionRequise La connexion est-elle requise
- * @param bool $verificationRequise La vérification est-elle requise
- * @param bool $adminRequis L'accès admin est-il requis
- */
-function verifierAcces($connexionRequise = true, $verificationRequise = true, $adminRequis = false) {
-    if ($connexionRequise && !estConnecte()) {
-        afficherAlerte('Vous devez être connecté pour accéder à cette page.', 'danger');
-        rediriger(APP_URL . '/connexion.php');
-    }
-
-    if ($verificationRequise && estConnecte() && !$_SESSION['est_verifie']) {
-        afficherAlerte('Vous devez vérifier votre email pour accéder à cette page.', 'warning');
-        rediriger(APP_URL . '/verification-email.php');
-    }
-
-    if ($adminRequis && (!estConnecte() || !$_SESSION['est_admin'])) {
-        afficherAlerte('Vous n\'avez pas les droits nécessaires pour accéder à cette page.', 'danger');
-        rediriger(APP_URL);
-    }
 }
 ?>
