@@ -1,178 +1,76 @@
 /* Styles personnalisés pour OmnesBnB */
 
-/* Correction pour le footer fixe */
-body {
-    padding-bottom: 70px; /* Hauteur de la barre de navigation */
+/* Header */
+.header {
+  padding: 16px 20px;
 }
 
-/* Style Uber-like */
-nav a {
-    transition: all 0.2s ease-in-out;
+/* Home search form */
+.search-form-home {
+  margin-top: 20px;
 }
 
-nav a.active {
-    color: black;
-    font-weight: 600;
+/* Property card */
+.property-card {
+  margin-bottom: 24px;
 }
 
-nav a:not(.active) {
-    color: #777;
+.property-image {
+  height: 200px;
+  object-fit: cover;
+  width: 100%;
 }
 
-/* Animations et transitions */
-a, button {
-    transition: all 0.2s ease-in-out;
+.property-info {
+  padding: 12px;
 }
 
-button:hover {
-    opacity: 0.9;
+/* Bottom navigation */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  background-color: white;
+  border-top: 1px solid #f0f0f0;
+  padding: 12px 0;
+  z-index: 1000;
 }
 
-/* Personnalisation des formulaires */
-input, textarea, select {
-    outline: none;
+/* Profile page */
+.profile-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin: 0 auto 20px;
 }
 
-input:focus, textarea:focus, select:focus {
-    border-color: #000;
-    box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+/* Form styling */
+.form-container {
+  padding: 20px;
 }
 
-/* Cards style */
-.card {
-    border-radius: 0.5rem;
-    overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    background-color: white;
+/* Utility classes */
+.container-mobile {
+  padding-left: 20px;
+  padding-right: 20px;
+  max-width: 100%;
 }
 
-.card-image {
-    height: 200px;
-    object-fit: cover;
-    width: 100%;
+.mb-safe {
+  margin-bottom: 80px; /* Safe area for bottom navigation */
 }
 
-.card-content {
-    padding: 1rem;
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
-.card-title {
-    font-weight: 700;
-    font-size: 1.25rem;
-    margin-bottom: 0.5rem;
-}
-
-.card-subtitle {
-    color: #6b7280;
-    margin-bottom: 0.5rem;
-}
-
-/* Boutons */
-.btn {
-    padding: 0.75rem 1rem;
-    font-weight: 500;
-    border-radius: 0.25rem;
-    display: inline-block;
-    text-align: center;
-}
-
-.btn-primary {
-    background-color: black;
-    color: white;
-}
-
-.btn-secondary {
-    background-color: #f3f4f6;
-    color: #1f2937;
-}
-
-.btn-outline {
-    border: 1px solid #e5e7eb;
-    color: #1f2937;
-}
-
-/* Alertes et notifications */
-.alert {
-    padding: 0.75rem 1rem;
-    border-radius: 0.25rem;
-    margin-bottom: 1rem;
-}
-
-.alert-success {
-    background-color: #d1fae5;
-    border: 1px solid #10b981;
-    color: #065f46;
-}
-
-.alert-danger {
-    background-color: #fee2e2;
-    border: 1px solid #ef4444;
-    color: #b91c1c;
-}
-
-.alert-warning {
-    background-color: #fef3c7;
-    border: 1px solid #f59e0b;
-    color: #d97706;
-}
-
-.alert-info {
-    background-color: #dbeafe;
-    border: 1px solid #3b82f6;
-    color: #1e40af;
-}
-
-/* Layout specifics */
-.container-narrow {
-    max-width: 640px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-/* Form elements */
-.form-group {
-    margin-bottom: 1rem;
-}
-
-.form-label {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-weight: 500;
-}
-
-.form-input {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.25rem;
-}
-
-.form-help {
-    font-size: 0.875rem;
-    color: #6b7280;
-    margin-top: 0.25rem;
-}
-
-.form-error {
-    font-size: 0.875rem;
-    color: #ef4444;
-    margin-top: 0.25rem;
-}
-
-/* Styles spécifiques mobile */
-@media (max-width: 640px) {
-    .container {
-        width: 100%;
-    }
-    
-    .hide-mobile {
-        display: none;
-    }
-}
-
-/* Styles pour tablette et desktop */
-@media (min-width: 641px) {
-    .hide-desktop {
-        display: none;
-    }
+/* Animation for page transitions */
+.page-transition {
+  transition: opacity 0.3s ease;
 }
