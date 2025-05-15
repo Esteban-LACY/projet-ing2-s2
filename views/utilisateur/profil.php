@@ -157,4 +157,66 @@
             </div>
             
             <div class="mb-4">
-                <label for
+                <label for="telephone" class="block text-gray-700 mb-2">Téléphone</label>
+                <input type="tel" id="telephone" name="telephone" value="<?php echo htmlspecialchars($utilisateur['telephone']); ?>" class="input-field" required>
+            </div>
+            
+            <div class="flex space-x-2">
+                <button type="submit" class="btn-primary flex-1">Enregistrer</button>
+                <button type="button" id="annuler-modification" class="btn-secondary flex-1">Annuler</button>
+            </div>
+        </form>
+        
+        <h2 class="text-2xl font-bold mb-4">Modifier le mot de passe</h2>
+        
+        <form id="password-form" method="POST" action="<?php echo SITE_URL; ?>controllers/utilisateur.php?action=modifier_mot_de_passe" class="mb-6">
+            <div class="mb-4">
+                <label for="ancien_mot_de_passe" class="block text-gray-700 mb-2">Mot de passe actuel</label>
+                <input type="password" id="ancien_mot_de_passe" name="ancien_mot_de_passe" class="input-field" required>
+            </div>
+            
+            <div class="mb-4">
+                <label for="nouveau_mot_de_passe" class="block text-gray-700 mb-2">Nouveau mot de passe</label>
+                <input type="password" id="nouveau_mot_de_passe" name="nouveau_mot_de_passe" class="input-field" required>
+                <p class="text-gray-500 text-sm mt-1">8 caractères minimum.</p>
+            </div>
+            
+            <div class="mb-4">
+                <label for="confirmer_mot_de_passe" class="block text-gray-700 mb-2">Confirmer le nouveau mot de passe</label>
+                <input type="password" id="confirmer_mot_de_passe" name="confirmer_mot_de_passe" class="input-field" required>
+            </div>
+            
+            <button type="submit" class="btn-primary w-full">Changer le mot de passe</button>
+        </form>
+        
+        <div class="text-center mt-8">
+            <button id="delete-account-btn" class="text-red-500 underline">Supprimer mon compte</button>
+        </div>
+    </div>
+    
+    <!-- Bouton de déconnexion -->
+    <div class="text-center mt-8">
+        <a href="<?php echo SITE_URL; ?>deconnexion.php" class="btn-secondary">Se déconnecter</a>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestion du formulaire de modification
+        const modifierProfilBtn = document.getElementById('modifier-profil-btn');
+        const modifierProfilForm = document.getElementById('modifier-profil-form');
+        const annulerModificationBtn = document.getElementById('annuler-modification');
+        
+        if (modifierProfilBtn && modifierProfilForm && annulerModificationBtn) {
+            modifierProfilBtn.addEventListener('click', function() {
+                modifierProfilBtn.parentElement.classList.add('hidden');
+                modifierProfilForm.classList.remove('hidden');
+            });
+            
+            annulerModificationBtn.addEventListener('click', function() {
+                modifierProfilForm.classList.add('hidden');
+                modifierProfilBtn.parentElement.classList.remove('hidden');
+            });
+        }
+    });
+</script>
