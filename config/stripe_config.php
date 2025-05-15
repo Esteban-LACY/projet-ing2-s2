@@ -1,127 +1,151 @@
 <?php
 /**
- * Configuration pour l'API Stripe
+ * Configuration de l'API Stripe
+ * 
+ * Ce fichier contient les paramètres de configuration pour l'intégration de Stripe
+ * 
+ * @author OmnesBnB
  */
 
-// Clés API Stripe
-define('STRIPE_SECRET_KEY', 'sk_test_your_stripe_secret_key'); // Clé secrète
-define('STRIPE_PUBLIC_KEY', 'pk_test_your_stripe_public_key'); // Clé publique
-define('STRIPE_WEBHOOK_SECRET', 'whsec_your_stripe_webhook_secret'); // Clé secrète de webhook
+// Clés API Stripe (à remplacer par vos propres clés)
+define('STRIPE_SECRET_KEY', 'sk_test_51XxXxXXxXxXxXxXxXxXxXxXx');
+define('STRIPE_PUBLISHABLE_KEY', 'pk_test_51XxXxXXxXxXxXxXxXxXxXxXx');
 
-// Configuration des devises et montants
-define('STRIPE_CURRENCY', 'eur'); // Devise (EUR pour euros)
-define('STRIPE_MIN_AMOUNT', 100); // Montant minimum en centimes (1€)
-define('STRIPE_MAX_AMOUNT', 1000000); // Montant maximum en centimes (10000€)
+// Webhook secret pour vérifier les signatures (à définir dans le dashboard Stripe)
+define('STRIPE_WEBHOOK_SECRET', 'whsec_XxXxXxXxXxXxXxXxXxXxXxXx');
 
-// Configuration des URLs de redirection
-define('STRIPE_SUCCESS_URL', APP_URL . '/paiement-succes.php'); // URL de succès
-define('STRIPE_CANCEL_URL', APP_URL . '/paiement-annule.php'); // URL d'annulation
+// URL de redirection après paiement
+define('STRIPE_SUCCESS_URL', URL_SITE . '/reservation/confirmation.php?status=success&session_id={CHECKOUT_SESSION_ID}');
+define('STRIPE_CANCEL_URL', URL_SITE . '/reservation/confirmation.php?status=cancel&session_id={CHECKOUT_SESSION_ID}');
 
-// Configuration des commissions
-define('STRIPE_FEE_PERCENTAGE', 0.05); // 5% de commission
-define('STRIPE_FEE_FIXED', 0.50); // 0.50€ de commission fixe
+// Configuration des frais de service
+define('FRAIS_SERVICE_POURCENTAGE', 10); // 10% de frais de service
 
 /**
- * Calcule le montant de la commission
- * @param float $montant Montant total
- * @return float Montant de la commission
+ * Calcule le montant des frais de service pour une réservation
+ * 
+ * @param float $montant Montant de la réservation
+ * @return float Montant des frais de service
  */
-function calculerCommissionStripe($montant) {
-    return ($montant * STRIPE_FEE_PERCENTAGE) + STRIPE_FEE_FIXED;
+function calculerFraisService($montant) {
+    return round($montant * (FRAIS_SERVICE_POURCENTAGE / 100), 2);
 }
 
 /**
- * Initialise Stripe avec la clé API
+ * Calcule le montant total à payer pour une réservation (montant + frais)
+ * 
+ * @param float $montant Montant de la réservation
+ * @return float Montant total à payer
  */
-function initialiserStripe() {
-    require_once ROOT_PATH . 'vendor/autoload.php';
-    \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+function calculerMontantTotal($montant) {
+    return $montant + calculerFraisService($montant);
 }
 
 /**
  * Crée une session de paiement Stripe
- * @param array $options Options de la session
- * @return \Stripe\Checkout\Session|false Session ou false
+ * 
+ * @param array $reservation Données de la réservation
+ * @return string|false ID de la session ou false en cas d'erreur
  */
-function creerSessionStripe($options) {
+function creerSessionPaiement($reservation) {
+    // Vérifier que Stripe est configuré
+    if (empty(STRIPE_SECRET_KEY)) {
+        return false;
+    }
+    
+    // Initialiser l'API Stripe
+    require_once CHEMIN_RACINE . '/vendor/autoload.php';
+    \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+    
     try {
-        initialiserStripe();
+        // Calculer le montant total
+        $montantTotal = calculerMontantTotal($reservation['prix_total']);
+        $fraisService = calculerFraisService($reservation['prix_total']);
         
-        // Options par défaut
-        $defaultOptions = [
+        // Créer la session de paiement
+        $session = \Stripe\Checkout\Session::create([
             'payment_method_types' => ['card'],
+            'line_items' => [
+                [
+                    'price_data' => [
+                        'currency' => 'eur',
+                        'unit_amount' => round($reservation['prix_total'] * 100), // En centimes
+                        'product_data' => [
+                            'name' => 'Réservation - ' . $reservation['titre_logement'],
+                            'description' => 'Du ' . formatDate($reservation['date_debut']) . ' au ' . formatDate($reservation['date_fin']),
+                        ],
+                    ],
+                    'quantity' => 1,
+                ],
+                [
+                    'price_data' => [
+                        'currency' => 'eur',
+                        'unit_amount' => round($fraisService * 100), // En centimes
+                        'product_data' => [
+                            'name' => 'Frais de service',
+                            'description' => FRAIS_SERVICE_POURCENTAGE . '% du montant de la réservation',
+                        ],
+                    ],
+                    'quantity' => 1,
+                ],
+            ],
             'mode' => 'payment',
-            'success_url' => STRIPE_SUCCESS_URL . '?session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => STRIPE_CANCEL_URL . '?session_id={CHECKOUT_SESSION_ID}'
-        ];
+            'success_url' => STRIPE_SUCCESS_URL,
+            'cancel_url' => STRIPE_CANCEL_URL,
+            'client_reference_id' => $reservation['id'],
+            'metadata' => [
+                'id_reservation' => $reservation['id'],
+                'id_logement' => $reservation['id_logement'],
+                'id_locataire' => $reservation['id_locataire'],
+            ],
+        ]);
         
-        // Fusionner les options
-        $options = array_merge($defaultOptions, $options);
-        
-        // Créer la session
-        $session = \Stripe\Checkout\Session::create($options);
-        
-        return $session;
+        return $session->id;
     } catch (\Exception $e) {
-        if (APP_DEBUG) {
-            echo 'Erreur Stripe : ' . $e->getMessage();
+        if (MODE_DEVELOPPEMENT) {
+            echo "Erreur Stripe: " . $e->getMessage();
+        } else {
+            error_log("Erreur Stripe: " . $e->getMessage());
         }
-        
         return false;
     }
 }
 
 /**
- * Vérifie la signature d'un webhook Stripe
- * @param string $payload Contenu de la requête
- * @param string $sigHeader En-tête de signature
- * @return \Stripe\Event|false Événement ou false
+ * Récupère une session de paiement Stripe
+ * 
+ * @param string $sessionId ID de la session Stripe
+ * @return object|false Objet session ou false en cas d'erreur
  */
-function verifierWebhookStripe($payload, $sigHeader) {
+function recupererSessionPaiement($sessionId) {
+    // Vérifier que Stripe est configuré
+    if (empty(STRIPE_SECRET_KEY)) {
+        return false;
+    }
+    
+    // Initialiser l'API Stripe
+    require_once CHEMIN_RACINE . '/vendor/autoload.php';
+    \Stripe\Stripe::setApiKey(STRIPE_SECRET_KEY);
+    
     try {
-        initialiserStripe();
-        
-        $event = \Stripe\Webhook::constructEvent(
-            $payload, $sigHeader, STRIPE_WEBHOOK_SECRET
-        );
-        
-        return $event;
+        return \Stripe\Checkout\Session::retrieve($sessionId);
     } catch (\Exception $e) {
-        if (APP_DEBUG) {
-            echo 'Erreur de vérification de webhook : ' . $e->getMessage();
+        if (MODE_DEVELOPPEMENT) {
+            echo "Erreur Stripe: " . $e->getMessage();
+        } else {
+            error_log("Erreur Stripe: " . $e->getMessage());
         }
-        
         return false;
     }
 }
 
 /**
- * Rembourse un paiement Stripe
- * @param string $idPaiement ID du paiement
- * @param float|null $montant Montant à rembourser (null pour tout)
- * @return \Stripe\Refund|false Remboursement ou false
+ * Formate une date pour l'affichage
+ * 
+ * @param string $date Date au format Y-m-d
+ * @return string Date au format d/m/Y
  */
-function rembourserPaiementStripe($idPaiement, $montant = null) {
-    try {
-        initialiserStripe();
-        
-        $options = [
-            'payment_intent' => $idPaiement
-        ];
-        
-        if ($montant !== null) {
-            $options['amount'] = round($montant * 100); // Conversion en centimes
-        }
-        
-        $refund = \Stripe\Refund::create($options);
-        
-        return $refund;
-    } catch (\Exception $e) {
-        if (APP_DEBUG) {
-            echo 'Erreur de remboursement : ' . $e->getMessage();
-        }
-        
-        return false;
-    }
+function formatDate($date) {
+    return date("d/m/Y", strtotime($date));
 }
 ?>
