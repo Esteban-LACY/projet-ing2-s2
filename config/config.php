@@ -158,21 +158,6 @@ function journaliser($message, $niveau = 'INFO') {
 }
 
 /**
- * Redirige l'utilisateur vers une autre page
- * 
- * @param string $url URL de destination
- * @return void
- */
-function rediriger($url) {
-    if (!headers_sent()) {
-        header("Location: $url");
-    } else {
-        echo '<script>window.location.href="' . $url . '";</script>';
-    }
-    exit();
-}
-
-/**
  * Nettoie une chaîne de caractères pour éviter les injections XSS
  * 
  * @param string $donnee Donnée à nettoyer
