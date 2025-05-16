@@ -10,23 +10,46 @@
 // Configuration de l'environnement
 define('MODE_DEVELOPPEMENT', true); // Mettre à false en production
 
-// Configuration de l'application
-define('NOM_SITE', 'OmnesBnB');
-define('URL_SITE', 'http://localhost/omnesbnb'); // À changer en production
+// Chemin racine avec realpath pour normalisation
+define('CHEMIN_RACINE', realpath(dirname(__DIR__)));
 
-// Configuration des chemins
-define('CHEMIN_RACINE', dirname(__DIR__));
-define('CHEMIN_VUES', CHEMIN_RACINE . '/views');
-define('CHEMIN_MODELES', CHEMIN_RACINE . '/models');
-define('CHEMIN_CONTROLEURS', CHEMIN_RACINE . '/controllers');
-define('CHEMIN_INCLUDES', CHEMIN_RACINE . '/includes');
-define('CHEMIN_UPLOADS', CHEMIN_RACINE . '/uploads');
+// Détection automatique de l'URL de base
+if (!defined('URL_SITE')) {
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+    $domainName = $_SERVER['HTTP_HOST'];
+    $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
+    $basePath = $scriptPath === '/' ? '' : $scriptPath;
+    define('URL_SITE', $protocol . $domainName . $basePath);
+}
+
+// Configuration des chemins avec vérification
+$cheminVues = CHEMIN_RACINE . '/views';
+$cheminModeles = CHEMIN_RACINE . '/models';
+$cheminControleurs = CHEMIN_RACINE . '/controllers';
+$cheminIncludes = CHEMIN_RACINE . '/includes';
+$cheminUploads = CHEMIN_RACINE . '/uploads';
+
+// Définir les chemins en vérifiant l'existence des dossiers
+define('CHEMIN_VUES', is_dir($cheminVues) ? $cheminVues : CHEMIN_RACINE);
+define('CHEMIN_MODELES', is_dir($cheminModeles) ? $cheminModeles : CHEMIN_RACINE . '/models');
+define('CHEMIN_CONTROLEURS', is_dir($cheminControleurs) ? $cheminControleurs : CHEMIN_RACINE . '/controllers');
+define('CHEMIN_INCLUDES', is_dir($cheminIncludes) ? $cheminIncludes : CHEMIN_RACINE . '/includes');
+define('CHEMIN_UPLOADS', is_dir($cheminUploads) ? $cheminUploads : CHEMIN_RACINE . '/uploads');
+
+// Configuration des dossiers d'uploads
 define('CHEMIN_UPLOADS_PROFILS', CHEMIN_UPLOADS . '/profils');
 define('CHEMIN_UPLOADS_LOGEMENTS', CHEMIN_UPLOADS . '/logements');
 
-// Configuration des uploads
-define('TAILLE_MAX_UPLOAD', 2 * 1024 * 1024); // 2 MB
-define('TYPES_IMAGES_AUTORISES', ['image/jpeg', 'image/png', 'image/gif']);
+// Créer les dossiers d'upload s'ils n'existent pas
+if (!is_dir(CHEMIN_UPLOADS)) {
+    mkdir(CHEMIN_UPLOADS, 0755, true);
+}
+if (!is_dir(CHEMIN_UPLOADS_PROFILS)) {
+    mkdir(CHEMIN_UPLOADS_PROFILS, 0755, true);
+}
+if (!is_dir(CHEMIN_UPLOADS_LOGEMENTS)) {
+    mkdir(CHEMIN_UPLOADS_LOGEMENTS, 0755, true);
+}
 
 // Configuration des sessions
 ini_set('session.cookie_httponly', 1);
