@@ -8,7 +8,9 @@
  */
 
 // Configuration de l'environnement
-define('MODE_DEVELOPPEMENT', true); // Mettre à false en production
+if (!defined('MODE_DEVELOPPEMENT')) {
+    define('MODE_DEVELOPPEMENT', true);
+}
 
 // Chemin racine avec realpath pour normalisation
 define('CHEMIN_RACINE', realpath(dirname(__DIR__)));
