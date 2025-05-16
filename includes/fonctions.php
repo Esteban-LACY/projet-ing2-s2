@@ -226,8 +226,13 @@ function urlPhotoProfil($url) {
  * @return void
  */
 function rediriger($url) {
-    header("Location: $url");
-    exit();
+    if (!headers_sent()) {
+        header("Location: $url");
+        exit();
+    } else {
+        echo '<script>window.location.href="'.htmlspecialchars($url, ENT_QUOTES, 'UTF-8').'";</script>';
+        exit();
+    }
 }
 
 /**
