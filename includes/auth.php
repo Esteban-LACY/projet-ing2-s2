@@ -35,7 +35,7 @@ function connecterUtilisateur($utilisateur) {
     $_SESSION['utilisateur_nom'] = $utilisateur['nom'];
     $_SESSION['utilisateur_prenom'] = $utilisateur['prenom'];
     $_SESSION['utilisateur_email'] = $utilisateur['email'];
-    $_SESSION['est_admin'] = $utilisateur['est_admin'] == 1;
+    $_SESSION['est_admin'] = (bool)$utilisateur['est_admin'];
     
     // Mettre à jour la date de dernière connexion
     majDerniereConnexion($utilisateur['id']);
