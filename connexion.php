@@ -2,6 +2,7 @@
 session_start();
 require_once 'includes/fonctions.php';
 require_once 'config/database.php';
+require_once 'includes/auth.php';
 
 // Redirection si l'utilisateur est déjà connecté
 if (estConnecte()) {
@@ -39,19 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$utilisateur['est_verifie']) {
                     $erreur = 'Votre compte n\'est pas encore activé. Veuillez vérifier votre email.';
                 } else {
-                    // Connexion réussie
-                    $_SESSION['utilisateur'] = [
-                        'id' => $utilisateur['id'],
-                        'nom' => $utilisateur['nom'],
-                        'prenom' => $utilisateur['prenom'],
-                        'email' => $utilisateur['email'],
-                        'est_admin' => $utilisateur['est_admin']
-                    ];
-                    
-                    // Mise à jour de la date de dernière connexion
-                    $requeteUpdate = $pdo->prepare('UPDATE utilisateurs SET derniere_connexion = NOW() WHERE id = :id');
-                    $requeteUpdate->bindParam(':id', $utilisateur['id']);
-                    $requeteUpdate->execute();
+                    // Connexion réussie - Utiliser la fonction de connexion standardisée
+                    connecterUtilisateur($utilisateur);
                     
                     // Redirection vers la page d'accueil
                     header('Location: index.php');
