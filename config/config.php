@@ -13,50 +13,51 @@ define('MODE_DEVELOPPEMENT', true); // Mettre à false en production
 // Chemin racine avec realpath pour normalisation
 define('CHEMIN_RACINE', realpath(dirname(__DIR__)));
 
-// Détection automatique de l'URL de base
-if (!defined('URL_SITE')) {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-    $domainName = $_SERVER['HTTP_HOST'];
-    $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
-    $basePath = $scriptPath === '/' ? '' : $scriptPath;
-    define('URL_SITE', $protocol . $domainName . $basePath);
-}
-
-// Configuration des chemins avec vérification
-$cheminVues = CHEMIN_RACINE . '/views';
-$cheminModeles = CHEMIN_RACINE . '/models';
-$cheminControleurs = CHEMIN_RACINE . '/controllers';
-$cheminIncludes = CHEMIN_RACINE . '/includes';
-$cheminUploads = CHEMIN_RACINE . '/uploads';
-
-// Définir les chemins en vérifiant l'existence des dossiers
-define('CHEMIN_VUES', is_dir($cheminVues) ? $cheminVues : CHEMIN_RACINE);
-define('CHEMIN_MODELES', is_dir($cheminModeles) ? $cheminModeles : CHEMIN_RACINE . '/models');
-define('CHEMIN_CONTROLEURS', is_dir($cheminControleurs) ? $cheminControleurs : CHEMIN_RACINE . '/controllers');
-define('CHEMIN_INCLUDES', is_dir($cheminIncludes) ? $cheminIncludes : CHEMIN_RACINE . '/includes');
-define('CHEMIN_UPLOADS', is_dir($cheminUploads) ? $cheminUploads : CHEMIN_RACINE . '/uploads');
+// Chemins des répertoires principaux
+define('CHEMIN_CONFIG', CHEMIN_RACINE . '/config');
+define('CHEMIN_VUES', CHEMIN_RACINE . '/views');
+define('CHEMIN_MODELES', CHEMIN_RACINE . '/models');
+define('CHEMIN_CONTROLEURS', CHEMIN_RACINE . '/controllers');
+define('CHEMIN_INCLUDES', CHEMIN_RACINE . '/includes');
+define('CHEMIN_SERVICES', CHEMIN_RACINE . '/services');
+define('CHEMIN_HELPERS', CHEMIN_RACINE . '/helpers');
+define('CHEMIN_ASSETS', CHEMIN_RACINE . '/assets');
+define('CHEMIN_UPLOADS', CHEMIN_RACINE . '/uploads');
 
 // Configuration des dossiers d'uploads
 define('CHEMIN_UPLOADS_PROFILS', CHEMIN_UPLOADS . '/profils');
 define('CHEMIN_UPLOADS_LOGEMENTS', CHEMIN_UPLOADS . '/logements');
 
-// Créer les dossiers d'upload s'ils n'existent pas
-if (!is_dir(CHEMIN_UPLOADS)) {
-    mkdir(CHEMIN_UPLOADS, 0755, true);
-}
-if (!is_dir(CHEMIN_UPLOADS_PROFILS)) {
-    mkdir(CHEMIN_UPLOADS_PROFILS, 0755, true);
-}
-if (!is_dir(CHEMIN_UPLOADS_LOGEMENTS)) {
-    mkdir(CHEMIN_UPLOADS_LOGEMENTS, 0755, true);
+// Détection automatique de l'URL de base
+if (!defined('URL_SITE')) {
+    $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+    $domainName = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+    $scriptPath = isset($_SERVER['SCRIPT_NAME']) ? dirname($_SERVER['SCRIPT_NAME']) : '';
+    $basePath = $scriptPath === '/' ? '' : $scriptPath;
+    define('URL_SITE', $protocol . $domainName . $basePath);
 }
 
-// Configuration des sessions
+// Création des dossiers s'ils n'existent pas
+$dossiers = [
+    CHEMIN_UPLOADS,
+    CHEMIN_UPLOADS_PROFILS,
+    CHEMIN_UPLOADS_LOGEMENTS,
+    CHEMIN_RACINE . '/logs'
+];
+
+foreach ($dossiers as $dossier) {
+    if (!is_dir($dossier)) {
+        mkdir($dossier, 0755, true);
+    }
+}
+
+// Configuration de session sécurisée
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
-if (MODE_DEVELOPPEMENT === false) {
-    ini_set('session.cookie_secure', 1);
-}
+ini_set('session.cookie_secure', MODE_DEVELOPPEMENT ? 0 : 1);
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.gc_maxlifetime', 3600); // Session expire après 1 heure
+ini_set('session.use_strict_mode', 1);
 session_start();
 
 // Configuration des erreurs
@@ -68,6 +69,10 @@ if (MODE_DEVELOPPEMENT) {
     ini_set('display_errors', 0);
     ini_set('display_startup_errors', 0);
     error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+    
+    // Log des erreurs en production
+    ini_set('log_errors', 1);
+    ini_set('error_log', CHEMIN_RACINE . '/logs/php-errors.log');
 }
 
 // Configuration des emails
@@ -82,34 +87,74 @@ define('DOMAINES_EMAIL_AUTORISES', [
     'edu.ece.fr'
 ]);
 
-// Fonctions utilitaires générales
+// Constantes pour les types de comptes
+define('TYPE_COMPTE_ADMIN', 'admin');
+define('TYPE_COMPTE_UTILISATEUR', 'utilisateur');
+
+// Constantes pour les types de logements
+define('TYPE_LOGEMENT_ENTIER', 'entier');
+define('TYPE_LOGEMENT_COLLOCATION', 'collocation');
+define('TYPE_LOGEMENT_LIBERE', 'libere');
+
+// Constantes pour les statuts de réservation
+define('STATUT_RESERVATION_EN_ATTENTE', 'en_attente');
+define('STATUT_RESERVATION_ACCEPTEE', 'acceptee');
+define('STATUT_RESERVATION_REFUSEE', 'refusee');
+define('STATUT_RESERVATION_ANNULEE', 'annulee');
+define('STATUT_RESERVATION_TERMINEE', 'terminee');
+
+// Constantes pour les statuts de paiement
+define('STATUT_PAIEMENT_EN_ATTENTE', 'en_attente');
+define('STATUT_PAIEMENT_COMPLETE', 'complete');
+define('STATUT_PAIEMENT_REMBOURSE', 'rembourse');
+define('STATUT_PAIEMENT_ECHOUE', 'echoue');
+
+// Limites de pagination par défaut
+define('PAGINATION_LIMITE_DEFAUT', 10);
+define('PAGINATION_LIMITE_MAX', 50);
+
+// Charger les configurations supplémentaires
+require_once CHEMIN_CONFIG . '/database.php';
+require_once CHEMIN_CONFIG . '/stripe_config.php';
+require_once CHEMIN_CONFIG . '/maps_config.php';
+
+// Charger les utilitaires essentiels
 require_once CHEMIN_INCLUDES . '/fonctions.php';
 
-// Configuration de la base de données
-require_once __DIR__ . '/database.php';
-
-// Configuration de Stripe (paiements)
-require_once __DIR__ . '/stripe_config.php';
-
-// Configuration de Google Maps
-require_once __DIR__ . '/maps_config.php';
-
 /**
- * Vérifie si l'utilisateur est connecté
+ * Active le mode de débogage pour afficher des informations détaillées
  * 
- * @return boolean True si l'utilisateur est connecté, false sinon
+ * @param mixed $var Variable à déboguer
+ * @param bool $exit Arrête l'exécution après l'affichage
+ * @return void
  */
-function estConnecte() {
-    return isset($_SESSION['utilisateur_id']) && !empty($_SESSION['utilisateur_id']);
+function debug($var, $exit = true) {
+    if (MODE_DEVELOPPEMENT) {
+        echo '<pre>';
+        print_r($var);
+        echo '</pre>';
+        
+        if ($exit) {
+            exit;
+        }
+    }
 }
 
 /**
- * Vérifie si l'utilisateur est administrateur
+ * Enregistre un message dans le fichier de journalisation
  * 
- * @return boolean True si l'utilisateur est administrateur, false sinon
+ * @param string $message Message à journaliser
+ * @param string $niveau Niveau de journalisation (INFO, WARNING, ERROR)
+ * @return void
  */
-function estAdmin() {
-    return estConnecte() && isset($_SESSION['est_admin']) && $_SESSION['est_admin'] === true;
+function journaliser($message, $niveau = 'INFO') {
+    $dateHeure = date('Y-m-d H:i:s');
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
+    $ligne = "[$dateHeure] [$niveau] [$ip] $message" . PHP_EOL;
+    
+    $cheminLog = CHEMIN_RACINE . '/logs/app.log';
+    
+    file_put_contents($cheminLog, $ligne, FILE_APPEND);
 }
 
 /**
@@ -119,7 +164,11 @@ function estAdmin() {
  * @return void
  */
 function rediriger($url) {
-    header("Location: $url");
+    if (!headers_sent()) {
+        header("Location: $url");
+    } else {
+        echo '<script>window.location.href="' . $url . '";</script>';
+    }
     exit();
 }
 
@@ -130,9 +179,29 @@ function rediriger($url) {
  * @return string Donnée nettoyée
  */
 function nettoyer($donnee) {
+    if (is_array($donnee)) {
+        return array_map('nettoyer', $donnee);
+    }
+    
     $donnee = trim($donnee);
     $donnee = stripslashes($donnee);
-    $donnee = htmlspecialchars($donnee, ENT_QUOTES, 'UTF-8');
-    return $donnee;
+    return htmlspecialchars($donnee, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Génère un identifiant unique sécurisé
+ * 
+ * @param int $longueur Longueur de l'identifiant (défaut: 32)
+ * @return string Identifiant unique
+ */
+function genererIdentifiantUnique($longueur = 32) {
+    if (function_exists('random_bytes')) {
+        return bin2hex(random_bytes($longueur / 2));
+    } elseif (function_exists('openssl_random_pseudo_bytes')) {
+        return bin2hex(openssl_random_pseudo_bytes($longueur / 2));
+    } else {
+        // Fallback si les fonctions cryptographiques ne sont pas disponibles
+        return md5(uniqid(mt_rand(), true));
+    }
 }
 ?>
