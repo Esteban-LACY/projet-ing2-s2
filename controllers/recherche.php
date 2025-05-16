@@ -31,6 +31,62 @@ switch ($action) {
  */
 function actionRechercherLogements() {
     // Paramètres de recherche
+    $filtres = preparerFiltresRecherche();
+    
+    // Options de tri
+    $tri = isset($_GET['tri']) ? nettoyer($_GET['tri']) : 'prix_asc';
+    
+    // Paramètres de pagination
+    $pagination = preparerPagination();
+    
+    // Récupérer les logements
+    $logements = rechercherLogements($filtres, $tri, $pagination['limite'], $pagination['offset']);
+    
+    // Ajouter les métadonnées aux logements
+    $logements = enrichirLogements($logements);
+    
+    // Récupérer le nombre total de logements correspondant aux critères
+    $total = compterLogements($filtres);
+    
+    // Calculer le nombre total de pages
+    $totalPages = ceil($total / $pagination['limite']);
+    
+    // Répondre avec succès
+    repondreJSON([
+        'success' => true,
+        'logements' => $logements,
+        'total' => $total,
+        'page' => $pagination['page'],
+        'limite' => $pagination['limite'],
+        'total_pages' => $totalPages
+    ]);
+}
+
+/**
+ * Récupère des suggestions de villes pour l'autocomplétion
+ */
+function actionSuggestionVilles() {
+    // Récupérer le terme de recherche
+    $terme = isset($_GET['terme']) ? nettoyer($_GET['terme']) : '';
+    
+    if (empty($terme) || strlen($terme) < 2) {
+        repondreJSON(['success' => true, 'suggestions' => []]);
+        return;
+    }
+    
+    // Récupérer les suggestions de villes
+    $suggestions = recupererSuggestionsVilles($terme);
+    
+    // Répondre avec succès
+    repondreJSON(['success' => true, 'suggestions' => $suggestions]);
+}
+
+/**
+ * Prépare les filtres de recherche à partir des paramètres GET
+ * 
+ * @return array Tableau des filtres
+ */
+function preparerFiltresRecherche() {
     $filtres = [];
     
     // Filtrer par lieu (ville ou code postal)
@@ -66,7 +122,9 @@ function actionRechercherLogements() {
     }
     
     // Filtrer par disponibilité
-    if (isset($_GET['date_debut']) && !empty($_GET['date_debut']) && isset($_GET['date_fin']) && !empty($_GET['date_fin'])) {
+    if (isset($_GET['date_debut']) && !empty($_GET['date_debut']) && 
+        isset($_GET['date_fin']) && !empty($_GET['date_fin'])) {
+        
         $dateDebut = nettoyer($_GET['date_debut']);
         $dateFin = nettoyer($_GET['date_fin']);
         
@@ -76,10 +134,15 @@ function actionRechercherLogements() {
         }
     }
     
-    // Options de tri
-    $tri = isset($_GET['tri']) ? nettoyer($_GET['tri']) : 'prix_asc';
-    
-    // Pagination
+    return $filtres;
+}
+
+/**
+ * Prépare les paramètres de pagination
+ * 
+ * @return array Tableau avec page, limite et offset
+ */
+function preparerPagination() {
     $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
     $limite = isset($_GET['limite']) ? intval($_GET['limite']) : 10;
     
@@ -93,49 +156,30 @@ function actionRechercherLogements() {
     
     $offset = ($page - 1) * $limite;
     
-    // Récupérer les logements
-    $logements = rechercherLogements($filtres, $tri, $limite, $offset);
-    
-    // Ajouter la photo principale pour chaque logement
-    foreach ($logements as &$logement) {
-        $photos = recupererPhotosLogement($logement['id']);
-        $logement['photo_principale'] = !empty($photos) ? $photos[0]['url'] : null;
-    }
-    
-    // Récupérer le nombre total de logements correspondant aux critères
-    $total = compterLogements($filtres);
-    
-    // Calculer le nombre total de pages
-    $totalPages = ceil($total / $limite);
-    
-    // Répondre avec succès
-    repondreJSON([
-        'success' => true,
-        'logements' => $logements,
-        'total' => $total,
+    return [
         'page' => $page,
         'limite' => $limite,
-        'total_pages' => $totalPages
-    ]);
+        'offset' => $offset
+    ];
 }
 
 /**
- * Récupère des suggestions de villes pour l'autocomplétion
+ * Enrichit les logements avec des métadonnées supplémentaires
+ * 
+ * @param array $logements Liste des logements
+ * @return array Liste des logements enrichis
  */
-function actionSuggestionVilles() {
-    // Récupérer le terme de recherche
-    $terme = isset($_GET['terme']) ? nettoyer($_GET['terme']) : '';
-    
-    if (empty($terme) || strlen($terme) < 2) {
-        repondreJSON(['success' => true, 'suggestions' => []]);
-        return;
+function enrichirLogements($logements) {
+    foreach ($logements as &$logement) {
+        // Ajouter la photo principale
+        $photos = recupererPhotosLogement($logement['id']);
+        $logement['photo_principale'] = !empty($photos) ? $photos[0]['url'] : null;
+        
+        // On pourrait ajouter d'autres enrichissements ici
+        // Par exemple, les notes des avis, la distance par rapport à l'utilisateur, etc.
     }
     
-    // Récupérer les suggestions de villes
-    $suggestions = recupererSuggestionsVilles($terme);
-    
-    // Répondre avec succès
-    repondreJSON(['success' => true, 'suggestions' => $suggestions]);
+    return $logements;
 }
 
 /**
