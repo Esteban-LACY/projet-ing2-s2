@@ -1,5 +1,10 @@
 <?php
 
+// DÉFINIR LA CONSTANTE AVANT DE L'UTILISER DANS LES ini_set()
+if (!defined('MODE_DEVELOPPEMENT')) {
+    define('MODE_DEVELOPPEMENT', true);
+}
+
 // Configuration de session sécurisée
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
@@ -7,7 +12,10 @@ ini_set('session.cookie_secure', MODE_DEVELOPPEMENT ? 0 : 1);
 ini_set('session.cookie_samesite', 'Lax');
 ini_set('session.gc_maxlifetime', 3600); // Session expire après 1 heure
 ini_set('session.use_strict_mode', 1);
-session_start();
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Configuration des erreurs
 if (MODE_DEVELOPPEMENT) {
