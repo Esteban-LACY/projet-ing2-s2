@@ -1,4 +1,12 @@
 <?php
+// Afficher toutes les erreurs et warnings PHP (en dev)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Test pour vérifier que le fichier est bien lu/exécuté
+echo "DEBUG: Le script index.php démarre<br>";
+
 /**
  * Page d'accueil OmnesBnB
  * Point d'entrée principal de l'application
@@ -60,7 +68,7 @@ $titre = 'Accueil';
 // Inclusion du header
 include 'views/commun/header.php';
 
-// Affichage de la vue principale de l'accueil (C'EST CECI QUI MANQUAIT !)
+// Affichage de la vue principale de l'accueil
 include 'views/accueil/index.php';
 
 // Inclusion du footer
