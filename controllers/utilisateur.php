@@ -62,6 +62,7 @@ function actionInscription() {
     $email = isset($_POST['email']) ? nettoyer($_POST['email']) : '';
     $motDePasse = isset($_POST['mot_de_passe']) ? $_POST['mot_de_passe'] : '';
     $confirmerMotDePasse = isset($_POST['confirmer_mot_de_passe']) ? $_POST['confirmer_mot_de_passe'] : '';
+    $telephone = isset($_POST['telephone']) ? nettoyer($_POST['telephone']) : '';
     
     // Valider les données
     $erreurs = [];
@@ -108,6 +109,10 @@ function actionInscription() {
         $erreurs[] = 'Les mots de passe ne correspondent pas';
     }
     
+    if (!empty($telephone) && !preg_match('/^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/', $telephone)) {
+        $erreurs[] = 'Format de téléphone invalide';
+    }
+    
     // Si des erreurs sont présentes, renvoyer une réponse d'erreur
     if (!empty($erreurs)) {
         repondreJSON(['success' => false, 'erreurs' => $erreurs]);
@@ -126,7 +131,10 @@ function actionInscription() {
         'prenom' => $prenom,
         'email' => $email,
         'mot_de_passe' => $motDePasseHash,
-        'token_verification' => $tokenVerification
+        'telephone' => $telephone,
+        'token_verification' => $tokenVerification,
+        'est_verifie' => 0,
+        'est_admin' => 0
     ]);
     
     if (!$idUtilisateur) {
@@ -135,16 +143,7 @@ function actionInscription() {
     }
     
     // Envoyer l'email de vérification
-    $sujet = 'Vérification de votre compte OmnesBnB';
-    $lienVerification = URL_SITE . '/verifier-email.php?token=' . $tokenVerification;
-    
-    $message = "Bonjour $prenom $nom,\n\n";
-    $message .= "Merci de vous être inscrit sur OmnesBnB. Pour confirmer votre adresse email, veuillez cliquer sur le lien suivant :\n\n";
-    $message .= "$lienVerification\n\n";
-    $message .= "Si vous n'avez pas créé de compte sur OmnesBnB, veuillez ignorer cet email.\n\n";
-    $message .= "Cordialement,\nL'équipe OmnesBnB";
-    
-    $envoiReussi = envoyerEmail($email, $sujet, $message);
+    $envoiReussi = envoyerEmailConfirmation($email, $prenom, $nom, $tokenVerification);
     
     if (!$envoiReussi) {
         repondreJSON([
@@ -201,21 +200,27 @@ function actionConnexion() {
         return;
     }
     
-    // Mettre à jour la date de dernière connexion
-    majDerniereConnexion($utilisateur['id']);
+    // Démarrer la session si ce n'est pas déjà fait
+    demarrerSession();
     
     // Stocker les informations de l'utilisateur en session
     $_SESSION['utilisateur_id'] = $utilisateur['id'];
     $_SESSION['utilisateur_nom'] = $utilisateur['nom'];
     $_SESSION['utilisateur_prenom'] = $utilisateur['prenom'];
     $_SESSION['utilisateur_email'] = $utilisateur['email'];
-    $_SESSION['est_admin'] = $utilisateur['est_admin'] == 1;
+    $_SESSION['est_admin'] = (bool)$utilisateur['est_admin'];
+    
+    // Mettre à jour la date de dernière connexion
+    majDerniereConnexion($utilisateur['id']);
+    
+    // Générer un nouveau token CSRF
+    genererToken();
     
     // Répondre avec succès
     repondreJSON([
         'success' => true,
         'message' => 'Connexion réussie',
-        'redirection' => $utilisateur['est_admin'] == 1 ? URL_SITE . '/admin' : URL_SITE
+        'redirection' => $_SESSION['est_admin'] ? URL_SITE . '/admin' : URL_SITE
     ]);
 }
 
@@ -223,11 +228,37 @@ function actionConnexion() {
  * Gère la déconnexion d'un utilisateur
  */
 function actionDeconnexion() {
-    // Détruire la session
-    session_destroy();
+    // S'assurer que la session est démarrée
+    demarrerSession();
     
-    // Rediriger vers la page d'accueil
-    rediriger(URL_SITE);
+    // Vérifier si l'utilisateur est connecté
+    if (isset($_SESSION['utilisateur_id'])) {
+        // Détruire toutes les variables de session
+        $_SESSION = [];
+        
+        // Détruire le cookie de session si nécessaire
+        if (ini_get('session.use_cookies')) {
+            $params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $params['path'],
+                $params['domain'],
+                $params['secure'],
+                $params['httponly']
+            );
+        }
+        
+        // Détruire la session
+        session_destroy();
+        
+        // Rediriger vers la page d'accueil avec un message de succès
+        rediriger(URL_SITE . '?deconnexion=1');
+    } else {
+        // L'utilisateur n'était pas connecté, rediriger simplement
+        rediriger(URL_SITE);
+    }
 }
 
 /**
@@ -257,6 +288,9 @@ function actionVerifierEmail() {
         repondreJSON(['success' => false, 'message' => 'Erreur lors de la vérification de l\'email']);
         return;
     }
+    
+    // Envoyer un email de bienvenue
+    envoyerEmailBienvenue($utilisateur['email'], $utilisateur['prenom'], $utilisateur['nom']);
     
     // Répondre avec succès
     repondreJSON([
@@ -294,17 +328,17 @@ function actionModifierProfil() {
     $erreurs = [];
     
     if (empty($nom)) {
-        $erreurs[] = 'Le nom est requis';
+        $erreurs['nom'] = 'Le nom est obligatoire.';
     }
     
     if (empty($prenom)) {
-        $erreurs[] = 'Le prénom est requis';
+        $erreurs['prenom'] = 'Le prénom est obligatoire.';
     }
     
     if (empty($email)) {
-        $erreurs[] = 'L\'email est requis';
+        $erreurs['email'] = 'L\'email est obligatoire.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $erreurs[] = 'Format d\'email invalide';
+        $erreurs['email'] = 'Format d\'email invalide.';
     } else {
         // Vérifier que l'email est institutionnel
         $domaineValide = false;
@@ -316,21 +350,18 @@ function actionModifierProfil() {
         }
         
         if (!$domaineValide) {
-            $erreurs[] = 'Vous devez utiliser une adresse email institutionnelle';
+            $erreurs['email'] = 'Vous devez utiliser une adresse email institutionnelle.';
         }
         
         // Vérifier que l'email n'est pas déjà utilisé par un autre utilisateur
         $utilisateur = recupererUtilisateurParEmail($email);
         if ($utilisateur && $utilisateur['id'] != $idUtilisateur) {
-            $erreurs[] = 'Cette adresse email est déjà utilisée';
+            $erreurs['email'] = 'Cette adresse email est déjà utilisée.';
         }
     }
     
-    if (!empty($telephone)) {
-        // Valider le format du téléphone (format français)
-        if (!preg_match('/^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/', $telephone)) {
-            $erreurs[] = 'Format de téléphone invalide';
-        }
+    if (!empty($telephone) && !preg_match('/^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/', $telephone)) {
+        $erreurs['telephone'] = 'Format de téléphone invalide.';
     }
     
     // Si des erreurs sont présentes, renvoyer une réponse d'erreur
@@ -360,7 +391,7 @@ function actionModifierProfil() {
     ];
     
     if ($emailChange) {
-        $donnees['est_verifie'] = false;
+        $donnees['est_verifie'] = 0;
         $donnees['token_verification'] = $tokenVerification;
     }
     
@@ -373,16 +404,7 @@ function actionModifierProfil() {
     
     // Si l'email a changé, envoyer un nouvel email de vérification
     if ($emailChange && $tokenVerification) {
-        $sujet = 'Vérification de votre nouvelle adresse email OmnesBnB';
-        $lienVerification = URL_SITE . '/verifier-email.php?token=' . $tokenVerification;
-        
-        $message = "Bonjour $prenom $nom,\n\n";
-        $message .= "Vous avez récemment modifié votre adresse email sur OmnesBnB. Pour confirmer votre nouvelle adresse, veuillez cliquer sur le lien suivant :\n\n";
-        $message .= "$lienVerification\n\n";
-        $message .= "Si vous n'avez pas effectué cette modification, veuillez nous contacter immédiatement.\n\n";
-        $message .= "Cordialement,\nL'équipe OmnesBnB";
-        
-        $envoiReussi = envoyerEmail($email, $sujet, $message);
+        $envoiReussi = envoyerEmailConfirmation($email, $prenom, $nom, $tokenVerification);
         
         if (!$envoiReussi) {
             repondreJSON([
@@ -584,6 +606,15 @@ function actionSupprimerCompte() {
         return;
     }
     
+    // Vérifier si l'utilisateur a des logements avec des réservations en cours
+    $logements = recupererLogementsPropriete($idUtilisateur);
+    foreach ($logements as $logement) {
+        if (logementAReservationsEnCours($logement['id'])) {
+            repondreJSON(['success' => false, 'message' => 'Vous ne pouvez pas supprimer votre compte car un de vos logements a des réservations en cours']);
+            return;
+        }
+    }
+    
     // Récupérer les informations de l'utilisateur
     $utilisateur = recupererUtilisateurParId($idUtilisateur);
     
@@ -592,12 +623,43 @@ function actionSupprimerCompte() {
         unlink(CHEMIN_RACINE . $utilisateur['photo_profil']);
     }
     
+    // Supprimer les photos des logements de l'utilisateur
+    foreach ($logements as $logement) {
+        $photos = recupererPhotosLogement($logement['id']);
+        foreach ($photos as $photo) {
+            if (file_exists(CHEMIN_RACINE . $photo['url'])) {
+                unlink(CHEMIN_RACINE . $photo['url']);
+            }
+        }
+    }
+    
     // Supprimer le compte
     $resultat = supprimerUtilisateur($idUtilisateur);
     
     if (!$resultat) {
         repondreJSON(['success' => false, 'message' => 'Erreur lors de la suppression du compte']);
         return;
+    }
+    
+    // Déconnecter l'utilisateur
+    // S'assurer que la session est démarrée
+    demarrerSession();
+    
+    // Détruire toutes les variables de session
+    $_SESSION = [];
+    
+    // Détruire le cookie de session si nécessaire
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params['path'],
+            $params['domain'],
+            $params['secure'],
+            $params['httponly']
+        );
     }
     
     // Détruire la session
@@ -627,5 +689,14 @@ function repondreJSON($donnees) {
  */
 function endsWith($chaine, $suffixe) {
     return substr_compare($chaine, $suffixe, -strlen($suffixe)) === 0;
+}
+
+/**
+ * Démarre la session si elle n'est pas déjà démarrée
+ */
+function demarrerSession() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
 }
 ?>
