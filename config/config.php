@@ -5,14 +5,6 @@ if (!defined('MODE_DEVELOPPEMENT')) {
     define('MODE_DEVELOPPEMENT', true);
 }
 
-// Configuration de session sécurisée
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-ini_set('session.cookie_secure', MODE_DEVELOPPEMENT ? 0 : 1);
-ini_set('session.cookie_samesite', 'Lax');
-ini_set('session.gc_maxlifetime', 3600); // Session expire après 1 heure
-ini_set('session.use_strict_mode', 1);
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -151,39 +143,6 @@ function debug($var, $exit = true) {
             exit;
         }
     }
-}
-
-/**
- * Enregistre un message dans le fichier de journalisation
- * 
- * @param string $message Message à journaliser
- * @param string $niveau Niveau de journalisation (INFO, WARNING, ERROR)
- * @return void
- */
-function journaliser($message, $niveau = 'INFO') {
-    $dateHeure = date('Y-m-d H:i:s');
-    $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
-    $ligne = "[$dateHeure] [$niveau] [$ip] $message" . PHP_EOL;
-    
-    $cheminLog = CHEMIN_RACINE . '/logs/app.log';
-    
-    file_put_contents($cheminLog, $ligne, FILE_APPEND);
-}
-
-/**
- * Nettoie une chaîne de caractères pour éviter les injections XSS
- * 
- * @param string $donnee Donnée à nettoyer
- * @return string Donnée nettoyée
- */
-function nettoyer($donnee) {
-    if (is_array($donnee)) {
-        return array_map('nettoyer', $donnee);
-    }
-    
-    $donnee = trim($donnee);
-    $donnee = stripslashes($donnee);
-    return htmlspecialchars($donnee, ENT_QUOTES, 'UTF-8');
 }
 
 /**

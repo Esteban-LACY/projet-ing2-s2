@@ -14,24 +14,6 @@ if (!defined('CHEMIN_RACINE')) {
 }
 
 /**
-* Nettoie une chaîne de caractères pour éviter les injections XSS
-* 
-* @param string $donnee Donnée à nettoyer
-* @return string Donnée nettoyée
-*/
-function nettoyer($donnee) {
-   if (is_array($donnee)) {
-       // Si c'est un tableau, nettoyer chaque élément récursivement
-       return array_map('nettoyer', $donnee);
-   }
-   
-   // Pour les chaînes
-   $donnee = trim($donnee);
-   $donnee = stripslashes($donnee);
-   return htmlspecialchars($donnee, ENT_QUOTES, 'UTF-8');
-}
-
-/**
 * Valide un jeton CSRF
 * 
 * @param string $token Jeton à valider
@@ -213,28 +195,6 @@ function estDateFuture($date) {
    }
    
    return strtotime($date) > time();
-}
-
-/**
-* Journalise un message dans le fichier de log
-* 
-* @param string $message Message à journaliser
-* @param string $niveau Niveau de log (INFO, WARNING, ERROR)
-* @return void
-*/
-function journaliser($message, $niveau = 'INFO') {
-   $dateHeure = date('Y-m-d H:i:s');
-   $ip = $_SERVER['REMOTE_ADDR'] ?? 'Inconnue';
-   $ligne = "[$dateHeure] [$niveau] [$ip] $message" . PHP_EOL;
-   
-   $cheminLog = CHEMIN_RACINE . '/logs/app.log';
-   $dossierLogs = dirname($cheminLog);
-   
-   if (!file_exists($dossierLogs)) {
-       mkdir($dossierLogs, 0755, true);
-   }
-   
-   file_put_contents($cheminLog, $ligne, FILE_APPEND);
 }
 
 /**
