@@ -1,4 +1,29 @@
 <?php
+
+// Configuration de session sécurisée
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_secure', MODE_DEVELOPPEMENT ? 0 : 1);
+ini_set('session.cookie_samesite', 'Lax');
+ini_set('session.gc_maxlifetime', 3600); // Session expire après 1 heure
+ini_set('session.use_strict_mode', 1);
+session_start();
+
+// Configuration des erreurs
+if (MODE_DEVELOPPEMENT) {
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+} else {
+    ini_set('display_errors', 0);
+    ini_set('display_startup_errors', 0);
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+
+    // Log des erreurs en production
+    ini_set('log_errors', 1);
+    ini_set('error_log', CHEMIN_RACINE . '/logs/php-errors.log');
+}
+
 /**
  * Configuration générale du site
  * 
@@ -53,29 +78,7 @@ foreach ($dossiers as $dossier) {
     }
 }
 
-// Configuration de session sécurisée
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-ini_set('session.cookie_secure', MODE_DEVELOPPEMENT ? 0 : 1);
-ini_set('session.cookie_samesite', 'Lax');
-ini_set('session.gc_maxlifetime', 3600); // Session expire après 1 heure
-ini_set('session.use_strict_mode', 1);
-session_start();
 
-// Configuration des erreurs
-if (MODE_DEVELOPPEMENT) {
-    ini_set('display_errors', 1);
-    ini_set('display_startup_errors', 1);
-    error_reporting(E_ALL);
-} else {
-    ini_set('display_errors', 0);
-    ini_set('display_startup_errors', 0);
-    error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
-    
-    // Log des erreurs en production
-    ini_set('log_errors', 1);
-    ini_set('error_log', CHEMIN_RACINE . '/logs/php-errors.log');
-}
 
 // Configuration des emails
 define('EMAIL_ADMINISTRATEUR', 'admin@omnesbnb.fr');
