@@ -10,7 +10,6 @@
 
 // Paramètres de connexion à la base de données
 // En production, ces paramètres devraient être récupérés depuis des variables d'environnement
-define('MODE_DEVELOPPEMENT', true); // Définition de la constante manquante
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_USER', getenv('DB_USER') ?: 'root'); // Modifié de 'omnesbnb_user' à 'root'
 define('DB_PASSWORD', getenv('DB_PASSWORD') ?: 'root'); // Mot de passe vide pour l'utilisateur root en local
