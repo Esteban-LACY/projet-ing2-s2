@@ -1,31 +1,65 @@
-/* Styles personnalisés pour OmnesBnB */
+/* Styles personnalisés pour OmnesBnB - Mobile First */
 
 /* Header */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: white;
+  border-bottom: 1px solid #f0f0f0;
   padding: 16px 20px;
 }
 
-/* Home search form */
-.search-form-home {
-  margin-top: 20px;
+/* Masquer les barres de défilement sur certains navigateurs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
-/* Property card */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Formulaire de recherche sur la page d'accueil */
+.search-form-home {
+  margin-top: 20px;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  transition: box-shadow 0.2s;
+}
+
+.search-form-home:active {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Carte de logement */
 .property-card {
-  margin-bottom: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  transition: transform 0.2s;
+}
+
+.property-card:active {
+  transform: scale(0.98);
 }
 
 .property-image {
   height: 200px;
   object-fit: cover;
   width: 100%;
+  background-color: #f7f7f7;
 }
 
 .property-info {
   padding: 12px;
 }
 
-/* Bottom navigation */
+/* Navigation du bas */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -35,42 +69,153 @@
   justify-content: space-around;
   background-color: white;
   border-top: 1px solid #f0f0f0;
-  padding: 12px 0;
+  padding-top: 12px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: 1000;
 }
 
-/* Profile page */
+.bottom-nav-icon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+/* Page profil */
 .profile-avatar {
-  width: 120px;
-  height: 120px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   object-fit: cover;
-  margin: 0 auto 20px;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Form styling */
-.form-container {
-  padding: 20px;
+.profile-header {
+  background-color: #f7f7f7;
+  padding: 24px 0;
+  text-align: center;
+  margin-bottom: 16px;
 }
 
-/* Utility classes */
-.container-mobile {
-  padding-left: 20px;
-  padding-right: 20px;
-  max-width: 100%;
-}
-
-.mb-safe {
-  margin-bottom: 80px; /* Safe area for bottom navigation */
-}
-
-/* Loading state */
+/* Loader et états de chargement */
 .loading {
-  opacity: 0.6;
+  opacity: 0.7;
   pointer-events: none;
 }
 
-/* Animation for page transitions */
+.loading-spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #000;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Animation pour les transitions de page */
 .page-transition {
   transition: opacity 0.3s ease;
+}
+
+.page-transition-enter {
+  opacity: 0;
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+}
+
+.page-transition-exit {
+  opacity: 1;
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+}
+
+/* Calendrier pour les réservations */
+.calendar-day {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+}
+
+.calendar-day-available {
+  background-color: #f7f7f7;
+}
+
+.calendar-day-selected {
+  background-color: black;
+  color: white;
+}
+
+.calendar-day-unavailable {
+  color: #ccc;
+  text-decoration: line-through;
+}
+
+/* Notifications */
+.notification {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #333;
+  color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  animation: slideDown 0.3s ease-out forwards;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Onglets */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 12px 16px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-active {
+  border-bottom-color: black;
+}
+
+/* Maps */
+.map-container {
+  height: 200px;
+  width: 100%;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+/* Media queries - Seront utilisés seulement après la finalisation mobile */
+@media (min-width: 640px) {
+  .container-mobile {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  /* Styles pour les tablettes et ordinateurs à implémenter plus tard */
 }
