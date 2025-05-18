@@ -97,7 +97,7 @@ $csrf_token = csrf_token();
             <a href="index.php" class="text-black font-bold text-xl">OmnesBnB</a>
             <!-- Navigation principale (PC) -->
             <nav class="hidden md:flex items-center space-x-6">
-                <a href="recherche.php" class="text-sm text-black hover:text-black">Chercher</a>
+                <a href="index.php" class="text-sm text-black hover:text-black">Chercher</a>
                 <a href="publier.php" class="text-sm text-black hover:text-black">Publier</a>
                 <a href="mes-locations.php" class="text-sm text-black hover:text-black">Mes locations</a>
                 <!-- Barre verticale de séparation -->
@@ -122,7 +122,7 @@ $csrf_token = csrf_token();
         </div>
         <!-- Menu mobile (affichage dynamique) -->
         <div id="menu-mobile" class="md:hidden hidden py-3">
-            <a href="recherche.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
+            <a href="index.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
             <a href="publier.php" class="block py-2 text-sm text-black font-medium text-center">Publier</a>
             <a href="mes-locations.php" class="block py-2 text-sm text-black font-medium text-center">Mes locations</a>
             <!-- Barre horizontale de séparation mobile -->

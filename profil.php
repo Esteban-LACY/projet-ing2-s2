@@ -57,7 +57,7 @@ $csrf_token = csrf_token();
         <div class="flex items-center justify-between h-16">
             <a href="index.php" class="text-black font-bold text-xl">OmnesBnB</a>
             <nav class="hidden md:flex items-center space-x-6">
-                <a href="recherche.php" class="text-sm text-black hover:text-black">Chercher</a>
+                <a href="index.php" class="text-sm text-black hover:text-black">Chercher</a>
                 <a href="publier.php" class="text-sm text-black hover:text-black">Publier</a>
                 <a href="mes-locations.php" class="text-sm text-black hover:text-black">Mes locations</a>
                 <div class="h-8 w-px mx-3 border-l-2 border-black"></div>
@@ -70,7 +70,7 @@ $csrf_token = csrf_token();
             </div>
         </div>
         <div id="menu-mobile" class="md:hidden hidden py-3">
-            <a href="recherche.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
+            <a href="index.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
             <a href="publier.php" class="block py-2 text-sm text-black font-medium text-center">Publier</a>
             <a href="mes-locations.php" class="block py-2 text-sm text-black font-medium text-center">Mes locations</a>
             <div class="w-4/5 mx-auto border-t-2 border-black my-3"></div>
@@ -273,7 +273,7 @@ $csrf_token = csrf_token();
         <p class="text-sm mb-6 opacity-90">
             Trouvez rapidement votre logement idéal parmi des centaines d'offres sur OmnesBnB. Votre nouvelle vie commence ici !
         </p>
-        <a href="recherche.php" class="bg-white text-black font-medium py-2 px-6 rounded-lg border border-white hover:bg-gray-100 inline-flex items-center shadow-md">
+        <a href="index.php" class="bg-white text-black font-medium py-2 px-6 rounded-lg border border-white hover:bg-gray-100 inline-flex items-center shadow-md">
             <i class="fas fa-search mr-2"></i> Chercher un logement
         </a>
         <div class="mt-12 pt-4 border-t border-gray-700 mx-auto w-full"></div>
