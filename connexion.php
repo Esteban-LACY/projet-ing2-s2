@@ -1,181 +1,21 @@
 <?php
-// Démarrer la session
-global $conn;
-session_start();
+// Inclusion du fichier de configuration
+include 'config.php';
+include 'security.php';
 
-// Inclure le fichier de configuration
-require_once "config.php";
-
-// Définir les variables avec des valeurs vides
-$email = $motDePasse = "";
-$email_inscription = $nom_inscription = $prenom_inscription = $mdp_inscription = $mdp2_inscription = "";
-$email_err = $motDePasse_err = $connexion_err = "";
-$inscription_success = $inscription_err = "";
-
-// Traitement du formulaire de connexion
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["connexion"])) {
-    // Vérifier si l'email est vide
-    if (empty(trim($_POST["email-connexion"]))) {
-        $email_err = "Veuillez saisir votre adresse e-mail.";
-    } else {
-        $email = trim($_POST["email-connexion"]);
-    }
-
-    // Vérifier si le mot de passe est vide
-    if (empty(trim($_POST["mdp-connexion"]))) {
-        $motDePasse_err = "Veuillez saisir votre mot de passe.";
-    } else {
-        $motDePasse = trim($_POST["mdp-connexion"]);
-    }
-
-    // Valider les identifiants
-    if (empty($email_err) && empty($motDePasse_err)) {
-        // Préparer la requête de sélection
-        $sql = "SELECT id, email, mot_de_passe, prenom, nom, type_utilisateur FROM utilisateurs WHERE email = :email";
-
-        global $conn;
-
-        try {
-            $stmt = $conn->prepare($sql);
-            $stmt->bindParam(":email", $param_email, PDO::PARAM_STR);
-
-            // Définir les paramètres
-            $param_email = $email;
-
-            // Exécuter la requête préparée
-            $stmt->execute();
-
-            // Si une ligne est trouvée (email existe)
-            if ($stmt->rowCount() == 1) {
-                // Récupérer les données de l'utilisateur
-                $row = $stmt->fetch(PDO::FETCH_ASSOC);
-                $id = $row["id"];
-                $hashed_password = $row["mot_de_passe"];
-                $prenom = $row["prenom"];
-                $nom = $row["nom"];
-                $type_utilisateur = $row["type_utilisateur"];
-
-                // Vérifier le mot de passe
-                // Partie spécifique à la connexion à modifier dans votre code
-                if (password_verify($motDePasse, $hashed_password)) {
-                    // Mot de passe correct, démarrer une nouvelle session
-                    $_SESSION["loggedin"] = true;
-                    $_SESSION["id"] = $id;
-                    $_SESSION["email"] = $email;
-                    $_SESSION["prenom"] = $prenom;
-                    $_SESSION["nom"] = $nom;
-                    $_SESSION["type_utilisateur"] = $type_utilisateur;
-
-                    // Forcer la redirection sans possibilité d'échec
-                    echo "<script>window.location.href = 'index.php';</script>";
-                    header("location: index.php");
-                    exit();
-                } else {
-                    // Le mot de passe n'est pas valide
-                    $connexion_err = "L'adresse e-mail ou le mot de passe que vous avez saisi est incorrect.";
-                }
-            } else {
-                // L'email n'existe pas
-                $connexion_err = "L'adresse e-mail ou le mot de passe que vous avez saisi est incorrect.";
-            }
-        } catch(PDOException $e) {
-            $connexion_err = "Oups! Quelque chose s'est mal passé. Veuillez réessayer plus tard. Erreur: " . $e->getMessage();
-        }
-    }
+// Redirection si l'utilisateur est déjà connecté
+if (isset($_SESSION['user_id'])) {
+    header('Location: index.php');
+    exit;
 }
 
-// Traitement du formulaire d'inscription
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["inscription"])) {
-    // Validation du prénom
-    if (empty(trim($_POST["prenom-inscription"]))) {
-        $inscription_err = "Veuillez saisir votre prénom.";
-    } else {
-        $prenom_inscription = trim($_POST["prenom-inscription"]);
-    }
+// Récupération des messages d'erreur et de succès
+$login_error = isset($_GET['login_error']) ? htmlspecialchars($_GET['login_error']) : '';
+$register_error = isset($_GET['register_error']) ? htmlspecialchars($_GET['register_error']) : '';
+$success = isset($_GET['success']) ? htmlspecialchars($_GET['success']) : '';
 
-    // Validation du nom
-    if (empty(trim($_POST["nom-inscription"]))) {
-        $inscription_err = "Veuillez saisir votre nom.";
-    } else {
-        $nom_inscription = trim($_POST["nom-inscription"]);
-    }
-
-    // Validation de l'email
-    if (empty(trim($_POST["email-inscription"]))) {
-        $inscription_err = "Veuillez saisir une adresse e-mail.";
-    } else {
-        // Vérifier si l'email est au format Omnes
-        $email_inscription = trim($_POST["email-inscription"]);
-        if (!preg_match("/@(ece\.fr|edu\.ece\.fr|omnesintervenant\.com)$/i", $email_inscription)) {
-            $inscription_err = "Veuillez utiliser une adresse e-mail Omnes valide.";
-        } else {
-            // Vérifier si l'email existe déjà
-            try {
-                $sql = "SELECT id FROM utilisateurs WHERE email = :email";
-                $stmt = $conn->prepare($sql);
-                $stmt->bindParam(":email", $email_inscription, PDO::PARAM_STR);
-                $stmt->execute();
-
-                if ($stmt->rowCount() > 0) {
-                    $inscription_err = "Cette adresse e-mail est déjà utilisée.";
-                }
-            } catch(PDOException $e) {
-                $inscription_err = "Erreur de vérification: " . $e->getMessage();
-            }
-        }
-    }
-
-    // Validation du mot de passe
-    if (empty(trim($_POST["mdp-inscription"]))) {
-        $inscription_err = "Veuillez saisir un mot de passe.";
-    } elseif (strlen(trim($_POST["mdp-inscription"])) < 6) {
-        $inscription_err = "Le mot de passe doit contenir au moins 6 caractères.";
-    } else {
-        $mdp_inscription = trim($_POST["mdp-inscription"]);
-    }
-
-    // Vérification de la confirmation du mot de passe
-    if (empty(trim($_POST["mdp2-inscription"]))) {
-        $inscription_err = "Veuillez confirmer le mot de passe.";
-    } else {
-        $mdp2_inscription = trim($_POST["mdp2-inscription"]);
-        if ($mdp_inscription != $mdp2_inscription) {
-            $inscription_err = "Les mots de passe ne correspondent pas.";
-        }
-    }
-
-    // Vérifier s'il n'y a pas d'erreurs avant d'insérer dans la base de données
-    if (empty($inscription_err)) {
-        try {
-            // Préparer une requête d'insertion
-            $sql = "INSERT INTO utilisateurs (prenom, nom, email, mot_de_passe, type_utilisateur) VALUES (:prenom, :nom, :email, :mot_de_passe, 'utilisateur')";
-            $stmt = $conn->prepare($sql);
-
-            // Définir les paramètres
-            $param_prenom = $prenom_inscription;
-            $param_nom = $nom_inscription;
-            $param_email = $email_inscription;
-            $param_password = password_hash($mdp_inscription, PASSWORD_DEFAULT); // Crée un mot de passe haché
-
-            // Lier les paramètres
-            $stmt->bindParam(":prenom", $param_prenom, PDO::PARAM_STR);
-            $stmt->bindParam(":nom", $param_nom, PDO::PARAM_STR);
-            $stmt->bindParam(":email", $param_email, PDO::PARAM_STR);
-            $stmt->bindParam(":mot_de_passe", $param_password, PDO::PARAM_STR);
-
-            // Exécuter la requête
-            if ($stmt->execute()) {
-                // Rediriger vers la page de connexion avec un message de succès
-                header("location: connexion.php?success=1");
-                exit;
-            } else {
-                $inscription_err = "Oups! Quelque chose s'est mal passé. Veuillez réessayer plus tard.";
-            }
-        } catch(PDOException $e) {
-            $inscription_err = "Erreur d'inscription: " . $e->getMessage();
-        }
-    }
-}
+// Génération du token CSRF
+$csrf_token = csrf_token();
 ?>
 
 <!DOCTYPE html>
@@ -235,22 +75,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["inscription"])) {
             color: #000;
             text-decoration: underline;
         }
-        .alert-danger {
-            background-color: #FEE2E2;
-            border: 2px solid #EF4444;
-            color: #B91C1C;
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        .alert-success {
-            background-color: #D1FAE5;
-            border: 2px solid #10B981;
-            color: #047857;
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-        }
         @media (min-width: 1024px) {
             .form-box {
                 max-width: 900px !important;  /* Largeur encore + grande sur PC */
@@ -292,7 +116,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["inscription"])) {
             </div>
         </div>
         <div id="menu-mobile" class="md:hidden hidden py-3">
-            <a href="index.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
+            <a href="recherche.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
             <a href="publier.php" class="block py-2 text-sm text-black font-medium text-center">Publier</a>
             <a href="mes-locations.php" class="block py-2 text-sm text-black font-medium text-center">Mes locations</a>
             <div class="w-4/5 mx-auto border-t-2 border-black my-3"></div>
@@ -327,48 +151,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["inscription"])) {
 <!-- Formulaires sous le bandeau noir -->
 <section id="zone-formulaire" class="py-10 px-4 bg-white">
     <div class="container mx-auto">
-        <?php
-        // Affichage de messages d'erreur ou de succès
-        if(isset($_GET["success"]) && $_GET["success"] == 1) {
-            echo '<div class="alert-success max-w-3xl mx-auto mb-4">Inscription réussie ! Vous pouvez maintenant vous connecter.</div>';
-        }
-        ?>
+        <!-- Message de succès si présent -->
+        <?php if (!empty($success)): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6 max-w-3xl mx-auto">
+                <?php echo $success; ?>
+            </div>
+        <?php endif; ?>
 
         <!-- Connexion -->
         <div id="bloc-connexion" class="w-full">
-            <?php
-            if(!empty($connexion_err)){
-                echo '<div class="alert-danger max-w-3xl mx-auto mb-4">' . $connexion_err . '</div>';
-            }
-            ?>
-            <form id="form-connexion" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="form-box bg-white border-2 border-black rounded-2xl shadow-lg p-8 mx-auto space-y-8">
+            <!-- Message d'erreur si présent -->
+            <?php if (!empty($login_error)): ?>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6 max-w-3xl mx-auto">
+                    <?php echo $login_error; ?>
+                </div>
+            <?php endif; ?>
+
+            <form id="form-connexion" action="process_login.php" method="POST" class="form-box bg-white border-2 border-black rounded-2xl shadow-lg p-8 mx-auto space-y-8">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
                 <div>
                     <label for="email-connexion" class="block text-lg font-semibold text-gray-700 mb-2">Adresse e-mail</label>
                     <input type="email" id="email-connexion" name="email-connexion"
                            placeholder="exemple@omnes.fr"
-                           class="w-full border-2 <?php echo (!empty($email_err)) ? 'border-red-500' : 'border-black'; ?> rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none"
-                           value="<?php echo $email; ?>" />
-                    <?php if(!empty($email_err)): ?>
-                        <p class="text-red-500 text-sm mt-1"><?php echo $email_err; ?></p>
-                    <?php endif; ?>
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
                 </div>
                 <div>
                     <label for="mdp-connexion" class="block text-lg font-semibold text-gray-700 mb-2">Mot de passe</label>
                     <input type="password" id="mdp-connexion" name="mdp-connexion"
                            placeholder="Votre mot de passe"
-                           class="w-full border-2 <?php echo (!empty($motDePasse_err)) ? 'border-red-500' : 'border-black'; ?> rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" />
-                    <?php if(!empty($motDePasse_err)): ?>
-                        <p class="text-red-500 text-sm mt-1"><?php echo $motDePasse_err; ?></p>
-                    <?php endif; ?>
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
                 </div>
                 <div class="flex justify-between items-center">
                     <label class="flex items-center cursor-pointer select-none">
-                        <input type="checkbox" name="remember-me" class="checkbox-uber" />
+                        <input type="checkbox" name="remember" class="checkbox-uber" />
                         <span class="text-base text-gray-700 font-medium">Se souvenir de moi</span>
                     </label>
-                    <a href="mot-de-passe-oublie.php" class="lien-noir">Mot de passe oublié&nbsp;?</a>
+                    <a href="motdepasse.php" class="lien-noir">Mot de passe oublié&nbsp;?</a>
                 </div>
-                <input type="hidden" name="connexion" value="1">
                 <button type="submit" class="bg-black text-white font-bold py-4 px-8 rounded-lg w-full hover:bg-gray-800 transition-all shadow-md text-2xl">
                     Se connecter
                 </button>
@@ -377,51 +196,73 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["inscription"])) {
 
         <!-- Inscription -->
         <div id="bloc-inscription" class="w-full hidden">
-            <?php
-            if(!empty($inscription_err)){
-                echo '<div class="alert-danger max-w-3xl mx-auto mb-4">' . $inscription_err . '</div>';
-            }
-            if(!empty($inscription_success)){
-                echo '<div class="alert-success max-w-3xl mx-auto mb-4">' . $inscription_success . '</div>';
-            }
-            ?>
-            <form id="form-inscription" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="form-box bg-white border-2 border-black rounded-2xl shadow-lg p-8 mx-auto space-y-8">
+            <!-- Message d'erreur si présent -->
+            <?php if (!empty($register_error)): ?>
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6 max-w-3xl mx-auto">
+                    <?php echo $register_error; ?>
+                </div>
+            <?php endif; ?>
+
+            <form id="form-inscription" action="process_register.php" method="POST" class="form-box bg-white border-2 border-black rounded-2xl shadow-lg p-8 mx-auto space-y-8">
+                <input type="hidden" name="csrf_token" value="<?php echo $csrf_token; ?>">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label for="prenom-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Prénom</label>
                         <input type="text" id="prenom-inscription" name="prenom-inscription"
                                placeholder="Votre prénom"
-                               class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none"
-                               value="<?php echo $prenom_inscription; ?>" />
+                               class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
                     </div>
                     <div>
                         <label for="nom-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Nom</label>
                         <input type="text" id="nom-inscription" name="nom-inscription"
                                placeholder="Votre nom"
-                               class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none"
-                               value="<?php echo $nom_inscription; ?>" />
+                               class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
                     </div>
                 </div>
                 <div>
                     <label for="email-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Adresse e-mail</label>
                     <input type="email" id="email-inscription" name="email-inscription"
                            placeholder="exemple@omnes.fr"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none"
-                           value="<?php echo $email_inscription; ?>" />
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
+                    <p class="text-sm text-gray-600 mt-1">Utilisez votre adresse @edu.ece.fr, @ece.fr ou @omnesintervenant.com</p>
+                </div>
+                <div>
+                    <label for="telephone-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Numéro de téléphone</label>
+                    <input type="tel" id="telephone-inscription" name="telephone-inscription"
+                           placeholder="Votre numéro de téléphone"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
+                </div>
+                <div>
+                    <label for="statut-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Statut</label>
+                    <select id="statut-inscription" name="statut-inscription" class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg focus:outline-none" required>
+                        <option value="">Sélectionnez votre statut</option>
+                        <option value="Étudiant(e)">Étudiant(e)</option>
+                        <option value="Personnel Omnes">Personnel Omnes</option>
+                        <option value="Professeur">Professeur</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="campus-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Campus</label>
+                    <select id="campus-inscription" name="campus-inscription" class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg focus:outline-none" required>
+                        <option value="">Sélectionnez votre campus</option>
+                        <option value="Paris">Paris</option>
+                        <option value="Lyon">Lyon</option>
+                        <option value="Bordeaux">Bordeaux</option>
+                    </select>
                 </div>
                 <div>
                     <label for="mdp-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Mot de passe</label>
                     <input type="password" id="mdp-inscription" name="mdp-inscription"
                            placeholder="Créez un mot de passe"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" />
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
+                    <p class="text-sm text-gray-600 mt-1">8 caractères minimum avec majuscules, minuscules, chiffres et caractères spéciaux</p>
                 </div>
                 <div>
                     <label for="mdp2-inscription" class="block text-lg font-semibold text-gray-700 mb-2">Confirmez le mot de passe</label>
                     <input type="password" id="mdp2-inscription" name="mdp2-inscription"
                            placeholder="Confirmez votre mot de passe"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" />
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 text-lg placeholder-gray-400 focus:outline-none" required />
                 </div>
-                <input type="hidden" name="inscription" value="1">
                 <button type="submit" class="bg-black text-white font-bold py-4 px-8 rounded-lg w-full hover:bg-gray-800 transition-all shadow-md text-2xl">
                     Créer mon compte
                 </button>
@@ -480,13 +321,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["inscription"])) {
     ongletConnexion.addEventListener('click', afficherConnexion);
     ongletInscription.addEventListener('click', afficherInscription);
 
-    // Si l'URL contient un paramètre pour l'onglet inscription
+    // Afficher l'onglet inscription si paramètre présent dans l'URL
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('inscription')) {
+    if (urlParams.get('register') === '1') {
         afficherInscription();
     } else {
         afficherConnexion();
     }
+
+    // Validation de mot de passe côté client
+    const mdpInscription = document.getElementById('mdp-inscription');
+    const mdp2Inscription = document.getElementById('mdp2-inscription');
+
+    mdp2Inscription.addEventListener('input', function() {
+        if (mdpInscription.value !== mdp2Inscription.value) {
+            mdp2Inscription.setCustomValidity('Les mots de passe ne correspondent pas');
+        } else {
+            mdp2Inscription.setCustomValidity('');
+        }
+    });
+
+    mdpInscription.addEventListener('input', function() {
+        if (mdp2Inscription.value && mdpInscription.value !== mdp2Inscription.value) {
+            mdp2Inscription.setCustomValidity('Les mots de passe ne correspondent pas');
+        } else {
+            mdp2Inscription.setCustomValidity('');
+        }
+    });
 </script>
 </body>
 </html>

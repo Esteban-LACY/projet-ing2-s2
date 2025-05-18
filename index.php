@@ -1,27 +1,95 @@
 <?php
-// Initialiser la session
-session_start();
+// Inclusion du fichier de configuration avec la connexion à la base de données
+include 'config.php';
 
-// Vérifier si l'utilisateur est connecté
-if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
-    // Si non, on peut afficher une alerte ou juste afficher le contenu normal
-    $user_connected = false;
-} else {
-    $user_connected = true;
-    $user_prenom = $_SESSION["prenom"];
-    $user_nom = $_SESSION["nom"];
+// Initialisation des variables de recherche
+$lieu = isset($_GET['lieu']) ? htmlspecialchars($_GET['lieu']) : '';
+$date_arrivee = isset($_GET['date_arrivee']) ? htmlspecialchars($_GET['date_arrivee']) : '';
+$date_depart = isset($_GET['date_depart']) ? htmlspecialchars($_GET['date_depart']) : '';
+$type_logement = isset($_GET['type_logement']) ? htmlspecialchars($_GET['type_logement']) : '';
+$type_sejour = isset($_GET['type_sejour']) ? htmlspecialchars($_GET['type_sejour']) : 'nuit';
+$prix_maximum = isset($_GET['prix_maximum']) ? intval($_GET['prix_maximum']) : 0;
+
+// Page actuelle pour la pagination
+$page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+$logements_par_page = 9;
+$offset = ($page - 1) * $logements_par_page;
+
+// Construction de la requête SQL pour récupérer les logements
+$sql = "SELECT * FROM logements WHERE 1=1";
+
+// Ajout des filtres si présents
+global $conn;
+if (!empty($lieu)) {
+    $lieu = mysqli_real_escape_string($conn, $lieu);
+    $sql .= " AND (adresse LIKE '%$lieu%' OR titre LIKE '%$lieu%')";
 }
+
+if (!empty($type_logement)) {
+    $type_logement = mysqli_real_escape_string($conn, $type_logement);
+    $sql .= " AND type = '$type_logement'";
+}
+
+// Filtre de prix selon le type de séjour
+if ($prix_maximum > 0) {
+    switch ($type_sejour) {
+        case 'nuit':
+            $sql .= " AND prix_nuit <= $prix_maximum";
+            break;
+        case 'semaine':
+            $sql .= " AND prix_semaine <= $prix_maximum";
+            break;
+        case 'mois':
+            $sql .= " AND prix_mois <= $prix_maximum";
+            break;
+        case 'annee':
+            $sql .= " AND prix_annee <= $prix_maximum";
+            break;
+    }
+}
+
+// Vérification des disponibilités si dates spécifiées
+if (!empty($date_arrivee) && !empty($date_depart)) {
+    $date_arrivee = mysqli_real_escape_string($conn, $date_arrivee);
+    $date_depart = mysqli_real_escape_string($conn, $date_depart);
+
+    // Exclure les logements déjà réservés pour cette période
+    $sql .= " AND id NOT IN (
+        SELECT logement_id FROM reservations 
+        WHERE (date_arrivee <= '$date_depart' AND date_depart >= '$date_arrivee')
+        AND statut != 'annulée'
+    )";
+}
+
+// Requête pour compter le nombre total de logements correspondant aux critères
+$count_sql = str_replace("SELECT *", "SELECT COUNT(*) AS total", $sql);
+$count_result = mysqli_query($conn, $count_sql);
+$count_row = mysqli_fetch_assoc($count_result);
+$total_logements = $count_row['total'];
+
+// Calcul du nombre total de pages
+$total_pages = ceil($total_logements / $logements_par_page);
+
+// Ajout de la clause LIMIT pour la pagination
+$sql .= " ORDER BY date_creation DESC LIMIT $offset, $logements_par_page";
+
+// Exécution de la requête principale
+$result = mysqli_query($conn, $sql);
+
+// Vérification si l'utilisateur est connecté pour adapter l'affichage du header
+$user_connected = isset($_SESSION['user_id']);
+$user_name = $user_connected ? $_SESSION['user_nom'] . ' ' . $_SESSION['user_prenom'] : '';
 ?>
 
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OmnesBnB - Logements pour étudiants et personnel Omnes</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -33,122 +101,107 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 </head>
 <body class="bg-white">
 
-<?php if($user_connected): ?>
-    <div class="alert-success max-w-3xl mx-auto mb-4">
-        Bienvenue <?php echo htmlspecialchars($user_prenom . ' ' . $user_nom); ?> !
-    </div>
-<?php endif; ?>
-
-<!-- En-tête principal avec navigation responsive -->
+<!-- En-tête -->
 <header class="bg-white sticky top-0 z-50 border-b-2 border-black shadow-sm">
     <div class="container mx-auto px-4">
         <div class="flex items-center justify-between h-16">
-            <!-- Logo -->
-            <a href="index.html" class="text-black font-bold text-xl">OmnesBnB</a>
-            <!-- Navigation principale (PC) -->
+            <a href="index.php" class="text-black font-bold text-xl">OmnesBnB</a>
             <nav class="hidden md:flex items-center space-x-6">
                 <a href="index.php" class="text-sm text-black hover:text-black">Chercher</a>
-                <a href="publier.html" class="text-sm text-black hover:text-black">Publier / Gérer</a>
-                <a href="mes-locations.html" class="text-sm text-black hover:text-black">Mes locations / Panier</a>
-                <!-- Barre verticale de séparation -->
+                <a href="publier.php" class="text-sm text-black hover:text-black">Publier</a>
+                <a href="mes-locations.php" class="text-sm text-black hover:text-black">Mes locations</a>
                 <div class="h-8 w-px mx-3 border-l-2 border-black"></div>
-                <!-- Bouton Connexion / Inscription -->
-                <a href="connexion.php" class="text-sm bg-black text-white py-2 px-6 rounded-lg hover:bg-gray-800">
-                    Connexion / Inscription
-                </a>
+                <?php if($user_connected): ?>
+                    <a href="profil.php" class="text-sm bg-black text-white py-2 px-6 rounded-lg hover:bg-gray-800">Mon Profil</a>
+                <?php else: ?>
+                    <a href="connexion.php" class="text-sm bg-black text-white py-2 px-6 rounded-lg hover:bg-gray-800">Connexion / Inscription</a>
+                <?php endif; ?>
             </nav>
-            <!-- Menu burger mobile -->
             <div class="md:hidden">
                 <button id="menu-burger" class="flex items-center p-2 rounded-lg border-2 border-black">
                     <i class="fas fa-bars text-gray-700"></i>
                 </button>
             </div>
         </div>
-        <!-- Menu mobile (affichage dynamique) -->
         <div id="menu-mobile" class="md:hidden hidden py-3">
             <a href="index.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
-            <a href="publier.html" class="block py-2 text-sm text-black font-medium text-center">Publier / Gérer</a>
-            <a href="mes-locations.html" class="block py-2 text-sm text-black font-medium text-center">Mes locations / Panier</a>
-            <!-- Barre horizontale de séparation mobile -->
+            <a href="publier.php" class="block py-2 text-sm text-black font-medium text-center">Publier</a>
+            <a href="mes-locations.php" class="block py-2 text-sm text-black font-medium text-center">Mes locations</a>
             <div class="w-4/5 mx-auto border-t-2 border-black my-3"></div>
-            <!-- Bouton Connexion / Inscription (mobile) -->
-            <a href="connexion.php" class="block text-sm bg-black text-white py-2 px-6 rounded-lg text-center hover:bg-gray-800">
-                Connexion / Inscription
-            </a>
+            <?php if($user_connected): ?>
+                <a href="profil.php" class="block text-sm bg-black text-white py-2 px-6 rounded-lg text-center hover:bg-gray-800">Mon Profil</a>
+            <?php else: ?>
+                <a href="connexion.php" class="block text-sm bg-black text-white py-2 px-6 rounded-lg text-center hover:bg-gray-800">Connexion / Inscription</a>
+            <?php endif; ?>
         </div>
     </div>
 </header>
 
-<!-- Section d'accroche avec formulaire de recherche -->
+<!-- Accroche + Formulaire -->
 <section class="flex flex-col items-center justify-center bg-black py-12 px-4">
     <div class="w-full flex flex-col items-center justify-center">
-        <h1 class="text-white text-4xl md:text-5xl font-bold mb-3 text-center leading-tight">
-            Trouvez votre logement idéal
-        </h1>
-        <p class="text-white text-lg md:text-2xl mb-8 opacity-90 text-center">
-            La plateforme de logements pour les étudiants et le personnel d'Omnes
-        </p>
+        <h1 class="text-white text-4xl md:text-5xl font-bold mb-3 text-center leading-tight">Trouvez votre logement idéal</h1>
+        <p class="text-white text-lg md:text-2xl mb-8 opacity-90 text-center">La plateforme de logements pour les étudiants et le personnel d'Omnes</p>
     </div>
     <div class="bg-white rounded-2xl p-8 shadow-lg border-2 border-black max-w-3xl w-full mx-auto">
-        <form action="recherche.html" method="GET" class="space-y-6">
+        <form action="index.php" method="GET" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
                     <label for="lieu" class="block text-sm font-medium text-gray-700 mb-1">Lieu</label>
-                    <input type="text" id="lieu" name="lieu"
-                           placeholder="Ville, quartier..."
+                    <input type="text" id="lieu" name="lieu" placeholder="Ville, quartier..."
+                           value="<?php echo $lieu; ?>"
                            class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
                 </div>
                 <div>
                     <label for="date_arrivee" class="block text-sm font-medium text-gray-700 mb-1">Date d'arrivée</label>
                     <input type="date" id="date_arrivee" name="date_arrivee"
-                           placeholder="Arrivée"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                           value="<?php echo $date_arrivee; ?>"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 focus:outline-none" />
                 </div>
                 <div>
                     <label for="date_depart" class="block text-sm font-medium text-gray-700 mb-1">Date de départ</label>
                     <input type="date" id="date_depart" name="date_depart"
-                           placeholder="Départ"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                           value="<?php echo $date_depart; ?>"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 focus:outline-none" />
                 </div>
                 <div>
                     <label for="type_logement" class="block text-sm font-medium text-gray-700 mb-1">Type de logement</label>
-                    <select id="type_logement" name="type_logement"
-                            class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none appearance-none">
-                        <option value="" class="text-gray-400">Tous les types</option>
-                        <option value="studio">Studio</option>
-                        <option value="chambre">Chambre</option>
-                        <option value="appartement">Appartement</option>
-                        <option value="collocation">Collocation</option>
+                    <select id="type_logement" name="type_logement" class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 appearance-none">
+                        <option value="" <?php echo $type_logement == '' ? 'selected' : ''; ?>>Tous les types</option>
+                        <option value="studio" <?php echo $type_logement == 'studio' ? 'selected' : ''; ?>>Studio</option>
+                        <option value="chambre" <?php echo $type_logement == 'chambre' ? 'selected' : ''; ?>>Chambre</option>
+                        <option value="appartement" <?php echo $type_logement == 'appartement' ? 'selected' : ''; ?>>Appartement</option>
+                        <option value="colocation" <?php echo $type_logement == 'colocation' ? 'selected' : ''; ?>>Collocation</option>
                     </select>
                 </div>
                 <div>
-                    <label for="prix_minimum" class="block text-sm font-medium text-gray-700 mb-1">Prix minimum</label>
-                    <input type="number" id="prix_minimum" name="prix_minimum"
-                           placeholder="Min"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                    <label for="type_sejour" class="block text-sm font-medium text-gray-700 mb-1">Type de séjour</label>
+                    <select id="type_sejour" name="type_sejour" class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 appearance-none">
+                        <option value="nuit" <?php echo $type_sejour == 'nuit' ? 'selected' : ''; ?>>Nuit(s)</option>
+                        <option value="semaine" <?php echo $type_sejour == 'semaine' ? 'selected' : ''; ?>>Semaine(s)</option>
+                        <option value="mois" <?php echo $type_sejour == 'mois' ? 'selected' : ''; ?>>Mois</option>
+                        <option value="annee" <?php echo $type_sejour == 'annee' ? 'selected' : ''; ?>>Année(s)</option>
+                    </select>
                 </div>
                 <div>
                     <label for="prix_maximum" class="block text-sm font-medium text-gray-700 mb-1">Prix maximum</label>
                     <input type="number" id="prix_maximum" name="prix_maximum"
-                           placeholder="Max"
-                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                           value="<?php echo $prix_maximum > 0 ? $prix_maximum : ''; ?>"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 focus:outline-none" />
                 </div>
             </div>
             <div>
-                <button type="submit" class="bg-black text-white font-medium py-3 px-10 rounded-lg w-full hover:bg-gray-900 transition-all shadow-md text-lg">
-                    Rechercher
-                </button>
+                <button type="submit" class="bg-black text-white font-medium py-3 px-10 rounded-lg w-full hover:bg-gray-900 transition-all shadow-md text-lg">Rechercher</button>
             </div>
         </form>
     </div>
 </section>
 
-<!-- Comment ça marche avec icônes encadrées style Uber -->
+<!-- Comment ça marche -->
 <section class="py-10 px-4 bg-white">
     <div class="container mx-auto max-w-5xl">
         <h2 class="text-2xl md:text-3xl font-bold mb-8 text-center">Comment ça marche</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <!-- Bloc 1 : Chercher -->
             <div class="text-center">
                 <div class="flex justify-center">
                     <div class="w-16 h-16 rounded-xl border-2 border-black flex items-center justify-center mb-4">
@@ -158,7 +211,6 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
                 <h3 class="text-lg font-semibold mb-2">Cherchez</h3>
                 <p class="text-gray-600 text-sm">Trouvez le logement qui correspond à vos besoins.</p>
             </div>
-            <!-- Bloc 2 : Réserver -->
             <div class="text-center">
                 <div class="flex justify-center">
                     <div class="w-16 h-16 rounded-xl border-2 border-black flex items-center justify-center mb-4">
@@ -168,7 +220,6 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
                 <h3 class="text-lg font-semibold mb-2">Réservez</h3>
                 <p class="text-gray-600 text-sm">Réservez et payez en ligne en toute sécurité.</p>
             </div>
-            <!-- Bloc 3 : Emménager -->
             <div class="text-center">
                 <div class="flex justify-center">
                     <div class="w-16 h-16 rounded-xl border-2 border-black flex items-center justify-center mb-4">
@@ -182,69 +233,86 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     </div>
 </section>
 
-<!-- Logements populaires -->
+<!-- Logements disponibles -->
 <section class="pb-10 pt-5 px-4 bg-white">
     <div class="container mx-auto max-w-6xl">
         <div class="bg-white border-2 border-black rounded-lg p-8 shadow-sm">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-2xl font-bold">Logements populaires</h2>
-                <a href="recherche.html" class="text-black font-medium text-sm hover:underline flex items-center">
-                    Voir tous <i class="fas fa-chevron-right ml-1 text-xs"></i>
-                </a>
+            <h2 class="text-2xl font-bold mb-8">Logements disponibles</h2>
+            <div id="logements-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+                <?php
+                // Affichage des logements
+                if (mysqli_num_rows($result) > 0) {
+                    while ($row = mysqli_fetch_assoc($result)) {
+                        // Récupération de l'image principale du logement
+                        $logement_id = $row['id'];
+                        $img_query = "SELECT photo_url FROM photos WHERE logement_id = $logement_id AND is_main = 1 LIMIT 1";
+                        $img_result = mysqli_query($conn, $img_query);
+
+                        if (mysqli_num_rows($img_result) > 0) {
+                            $img_row = mysqli_fetch_assoc($img_result);
+                            $image = $img_row['photo_url'];
+                        } else {
+                            // Image par défaut si aucune image principale n'est trouvée
+                            $image = "uploads/logements/default.jpg";
+                        }
+
+                        // Affichage du prix selon le type de séjour sélectionné
+                        $prix = '';
+                        switch ($type_sejour) {
+                            case 'nuit':
+                                $prix = $row['prix_nuit'] . "€ / nuit";
+                                break;
+                            case 'semaine':
+                                $prix = $row['prix_semaine'] . "€ / semaine";
+                                break;
+                            case 'mois':
+                                $prix = $row['prix_mois'] . "€ / mois";
+                                break;
+                            case 'annee':
+                                $prix = $row['prix_annee'] . "€ / an";
+                                break;
+                        }
+
+                        // Génération de la carte logement
+                        echo '<div>';
+                        echo '<img src="' . htmlspecialchars($image) . '" alt="' . htmlspecialchars($row['titre']) . '" class="w-full h-48 object-cover rounded-t-lg">';
+                        echo '<div class="mt-2 text-right">';
+                        echo '<span class="font-medium text-sm">' . htmlspecialchars($row['type']) . '</span>';
+                        echo '</div>';
+                        echo '<div class="flex justify-between items-center mt-2">';
+                        echo '<h3 class="text-lg font-bold">' . htmlspecialchars($row['titre']) . '</h3>';
+                        echo '</div>';
+                        echo '<p class="text-gray-600 text-sm mb-2">' . htmlspecialchars($row['adresse']) . '</p>';
+                        echo '<p class="font-bold text-lg mb-4">' . htmlspecialchars($prix) . '</p>';
+                        echo '<a href="logement.php?id=' . $row['id'] . '" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">';
+                        echo 'Voir détails';
+                        echo '</a>';
+                        echo '</div>';
+                    }
+                } else {
+                    // Message si aucun logement n'est trouvé
+                    echo '<div class="col-span-3 text-center py-8">';
+                    echo '<p class="text-lg text-gray-600">Aucun logement ne correspond à vos critères de recherche.</p>';
+                    echo '</div>';
+                }
+                ?>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <!-- Exemple d’annonce (à dupliquer ou remplacer dynamiquement) -->
-                <div>
-                    <img src="images/apt1.jpg" alt="Studio à Paris" class="w-full h-48 object-cover rounded-t-lg">
-                    <div class="mt-2 text-right">
-                        <span class="font-medium text-sm">Studio</span>
-                    </div>
-                    <div class="flex justify-between items-center mt-2">
-                        <h3 class="text-lg font-bold">Studio à Paris 15ème</h3>
-                    </div>
-                    <p class="text-gray-600 text-sm mb-2">Paris 15ème, proche ECE</p>
-                    <p class="font-bold text-lg mb-4">650€ <span class="text-gray-500 font-normal text-sm">/ mois</span></p>
-                    <a href="details-logement.html" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">
-                        Voir détails
+
+            <!-- Pagination -->
+            <?php if ($total_pages > 1): ?>
+                <div class="flex justify-center mt-8 space-x-4">
+                    <a href="index.php?page=<?php echo max(1, $page - 1); ?>&lieu=<?php echo urlencode($lieu); ?>&date_arrivee=<?php echo urlencode($date_arrivee); ?>&date_depart=<?php echo urlencode($date_depart); ?>&type_logement=<?php echo urlencode($type_logement); ?>&type_sejour=<?php echo urlencode($type_sejour); ?>&prix_maximum=<?php echo urlencode($prix_maximum); ?>"
+                       class="px-6 py-2 rounded-lg font-medium text-white bg-black hover:bg-gray-800 transition <?php echo $page <= 1 ? 'disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed' : ''; ?>"
+                        <?php echo $page <= 1 ? 'disabled' : ''; ?>>
+                        Précédent
+                    </a>
+                    <a href="index.php?page=<?php echo min($total_pages, $page + 1); ?>&lieu=<?php echo urlencode($lieu); ?>&date_arrivee=<?php echo urlencode($date_arrivee); ?>&date_depart=<?php echo urlencode($date_depart); ?>&type_logement=<?php echo urlencode($type_logement); ?>&type_sejour=<?php echo urlencode($type_sejour); ?>&prix_maximum=<?php echo urlencode($prix_maximum); ?>"
+                       class="px-6 py-2 rounded-lg font-medium text-white bg-black hover:bg-gray-800 transition <?php echo $page >= $total_pages ? 'disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed' : ''; ?>"
+                        <?php echo $page >= $total_pages ? 'disabled' : ''; ?>>
+                        Suivant
                     </a>
                 </div>
-                <div>
-                    <img src="images/apt2.jpg" alt="Chambre en collocation" class="w-full h-48 object-cover rounded-t-lg">
-                    <div class="mt-2 text-right">
-                        <span class="font-medium text-sm">Chambre</span>
-                    </div>
-                    <div class="flex justify-between items-center mt-2">
-                        <h3 class="text-lg font-bold">Chambre en collocation</h3>
-                        <div class="flex items-center">
-                            <i class="fas fa-star text-yellow-400 mr-1"></i>
-                            <span class="font-medium">4.6</span>
-                        </div>
-                    </div>
-                    <p class="text-gray-600 text-sm mb-2">Lyon 7ème, près du campus</p>
-                    <p class="font-bold text-lg mb-4">450€ <span class="text-gray-500 font-normal text-sm">/ mois</span></p>
-                    <a href="details-logement.html" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">
-                        Voir détails
-                    </a>
-                </div>
-                <div>
-                    <img src="images/apt3.jpg" alt="Appartement à Lille" class="w-full h-48 object-cover rounded-t-lg">
-                    <div class="mt-2 text-right">
-                        <span class="font-medium text-sm">Appartement</span>
-                    </div>
-                    <div class="flex justify-between items-center mt-2">
-                        <h3 class="text-lg font-bold">Appartement 2 pièces</h3>
-                        <div class="flex items-center">
-                            <i class="fas fa-star text-yellow-400 mr-1"></i>
-                            <span class="font-medium">4.9</span>
-                        </div>
-                    </div>
-                    <p class="text-gray-600 text-sm mb-2">Lille Centre, 10 min du campus</p>
-                    <p class="font-bold text-lg mb-4">550€ <span class="text-gray-500 font-normal text-sm">/ mois</span></p>
-                    <a href="details-logement.html" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">
-                        Voir détails
-                    </a>
-                </div>
-            </div>
+            <?php endif; ?>
         </div>
     </div>
 </section>
@@ -254,7 +322,7 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     <div class="container mx-auto max-w-3xl text-center">
         <h2 class="text-2xl font-bold mb-4">Vous avez un logement à proposer ?</h2>
         <p class="text-sm mb-6 opacity-90">Partagez votre logement avec la communauté Omnes et gagnez de l'argent</p>
-        <a href="publier.html" class="bg-white text-black font-medium py-2 px-6 rounded-lg border border-white hover:bg-gray-100 inline-flex items-center shadow-md">
+        <a href="publier.php" class="bg-white text-black font-medium py-2 px-6 rounded-lg border border-white hover:bg-gray-100 inline-flex items-center shadow-md">
             <i class="fas fa-plus mr-2"></i> Publier un logement
         </a>
         <div class="mt-12 pt-4 border-t border-gray-700 mx-auto w-full"></div>
@@ -264,12 +332,12 @@ if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     </div>
 </section>
 
+<!-- Script JavaScript -->
 <script>
-    // Gestion du menu mobile (affichage/caché)
-    document.getElementById('menu-burger').addEventListener('click', function() {
-        const menuMobile = document.getElementById('menu-mobile');
-        menuMobile.classList.toggle('hidden');
+    document.getElementById('menu-burger').addEventListener('click', function () {
+        document.getElementById('menu-mobile').classList.toggle('hidden');
     });
 </script>
+
 </body>
 </html>
