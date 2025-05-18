@@ -1,0 +1,275 @@
+<?php
+// Initialiser la session
+session_start();
+
+// Vérifier si l'utilisateur est connecté
+if(!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
+    // Si non, on peut afficher une alerte ou juste afficher le contenu normal
+    $user_connected = false;
+} else {
+    $user_connected = true;
+    $user_prenom = $_SESSION["prenom"];
+    $user_nom = $_SESSION["nom"];
+}
+?>
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmnesBnB - Logements pour étudiants et personnel Omnes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            max-width: 100%;
+            background-color: #FFFFFF;
+        }
+    </style>
+</head>
+<body class="bg-white">
+
+<?php if($user_connected): ?>
+    <div class="alert-success max-w-3xl mx-auto mb-4">
+        Bienvenue <?php echo htmlspecialchars($user_prenom . ' ' . $user_nom); ?> !
+    </div>
+<?php endif; ?>
+
+<!-- En-tête principal avec navigation responsive -->
+<header class="bg-white sticky top-0 z-50 border-b-2 border-black shadow-sm">
+    <div class="container mx-auto px-4">
+        <div class="flex items-center justify-between h-16">
+            <!-- Logo -->
+            <a href="index.html" class="text-black font-bold text-xl">OmnesBnB</a>
+            <!-- Navigation principale (PC) -->
+            <nav class="hidden md:flex items-center space-x-6">
+                <a href="index.php" class="text-sm text-black hover:text-black">Chercher</a>
+                <a href="publier.html" class="text-sm text-black hover:text-black">Publier / Gérer</a>
+                <a href="mes-locations.html" class="text-sm text-black hover:text-black">Mes locations / Panier</a>
+                <!-- Barre verticale de séparation -->
+                <div class="h-8 w-px mx-3 border-l-2 border-black"></div>
+                <!-- Bouton Connexion / Inscription -->
+                <a href="connexion.php" class="text-sm bg-black text-white py-2 px-6 rounded-lg hover:bg-gray-800">
+                    Connexion / Inscription
+                </a>
+            </nav>
+            <!-- Menu burger mobile -->
+            <div class="md:hidden">
+                <button id="menu-burger" class="flex items-center p-2 rounded-lg border-2 border-black">
+                    <i class="fas fa-bars text-gray-700"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Menu mobile (affichage dynamique) -->
+        <div id="menu-mobile" class="md:hidden hidden py-3">
+            <a href="index.php" class="block py-2 text-sm text-black font-medium text-center">Chercher</a>
+            <a href="publier.html" class="block py-2 text-sm text-black font-medium text-center">Publier / Gérer</a>
+            <a href="mes-locations.html" class="block py-2 text-sm text-black font-medium text-center">Mes locations / Panier</a>
+            <!-- Barre horizontale de séparation mobile -->
+            <div class="w-4/5 mx-auto border-t-2 border-black my-3"></div>
+            <!-- Bouton Connexion / Inscription (mobile) -->
+            <a href="connexion.php" class="block text-sm bg-black text-white py-2 px-6 rounded-lg text-center hover:bg-gray-800">
+                Connexion / Inscription
+            </a>
+        </div>
+    </div>
+</header>
+
+<!-- Section d'accroche avec formulaire de recherche -->
+<section class="flex flex-col items-center justify-center bg-black py-12 px-4">
+    <div class="w-full flex flex-col items-center justify-center">
+        <h1 class="text-white text-4xl md:text-5xl font-bold mb-3 text-center leading-tight">
+            Trouvez votre logement idéal
+        </h1>
+        <p class="text-white text-lg md:text-2xl mb-8 opacity-90 text-center">
+            La plateforme de logements pour les étudiants et le personnel d'Omnes
+        </p>
+    </div>
+    <div class="bg-white rounded-2xl p-8 shadow-lg border-2 border-black max-w-3xl w-full mx-auto">
+        <form action="recherche.html" method="GET" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div>
+                    <label for="lieu" class="block text-sm font-medium text-gray-700 mb-1">Lieu</label>
+                    <input type="text" id="lieu" name="lieu"
+                           placeholder="Ville, quartier..."
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                </div>
+                <div>
+                    <label for="date_arrivee" class="block text-sm font-medium text-gray-700 mb-1">Date d'arrivée</label>
+                    <input type="date" id="date_arrivee" name="date_arrivee"
+                           placeholder="Arrivée"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                </div>
+                <div>
+                    <label for="date_depart" class="block text-sm font-medium text-gray-700 mb-1">Date de départ</label>
+                    <input type="date" id="date_depart" name="date_depart"
+                           placeholder="Départ"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                </div>
+                <div>
+                    <label for="type_logement" class="block text-sm font-medium text-gray-700 mb-1">Type de logement</label>
+                    <select id="type_logement" name="type_logement"
+                            class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none appearance-none">
+                        <option value="" class="text-gray-400">Tous les types</option>
+                        <option value="studio">Studio</option>
+                        <option value="chambre">Chambre</option>
+                        <option value="appartement">Appartement</option>
+                        <option value="collocation">Collocation</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="prix_minimum" class="block text-sm font-medium text-gray-700 mb-1">Prix minimum</label>
+                    <input type="number" id="prix_minimum" name="prix_minimum"
+                           placeholder="Min"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                </div>
+                <div>
+                    <label for="prix_maximum" class="block text-sm font-medium text-gray-700 mb-1">Prix maximum</label>
+                    <input type="number" id="prix_maximum" name="prix_maximum"
+                           placeholder="Max"
+                           class="w-full border-2 border-black rounded-lg py-3 px-4 bg-white text-gray-900 placeholder-gray-400 focus:outline-none" />
+                </div>
+            </div>
+            <div>
+                <button type="submit" class="bg-black text-white font-medium py-3 px-10 rounded-lg w-full hover:bg-gray-900 transition-all shadow-md text-lg">
+                    Rechercher
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<!-- Comment ça marche avec icônes encadrées style Uber -->
+<section class="py-10 px-4 bg-white">
+    <div class="container mx-auto max-w-5xl">
+        <h2 class="text-2xl md:text-3xl font-bold mb-8 text-center">Comment ça marche</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- Bloc 1 : Chercher -->
+            <div class="text-center">
+                <div class="flex justify-center">
+                    <div class="w-16 h-16 rounded-xl border-2 border-black flex items-center justify-center mb-4">
+                        <i class="fas fa-search text-2xl text-black"></i>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Cherchez</h3>
+                <p class="text-gray-600 text-sm">Trouvez le logement qui correspond à vos besoins.</p>
+            </div>
+            <!-- Bloc 2 : Réserver -->
+            <div class="text-center">
+                <div class="flex justify-center">
+                    <div class="w-16 h-16 rounded-xl border-2 border-black flex items-center justify-center mb-4">
+                        <i class="fas fa-credit-card text-2xl text-black"></i>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Réservez</h3>
+                <p class="text-gray-600 text-sm">Réservez et payez en ligne en toute sécurité.</p>
+            </div>
+            <!-- Bloc 3 : Emménager -->
+            <div class="text-center">
+                <div class="flex justify-center">
+                    <div class="w-16 h-16 rounded-xl border-2 border-black flex items-center justify-center mb-4">
+                        <i class="fas fa-home text-2xl text-black"></i>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold mb-2">Emménagez</h3>
+                <p class="text-gray-600 text-sm">Contactez le propriétaire et installez-vous.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Logements populaires -->
+<section class="pb-10 pt-5 px-4 bg-white">
+    <div class="container mx-auto max-w-6xl">
+        <div class="bg-white border-2 border-black rounded-lg p-8 shadow-sm">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-2xl font-bold">Logements populaires</h2>
+                <a href="recherche.html" class="text-black font-medium text-sm hover:underline flex items-center">
+                    Voir tous <i class="fas fa-chevron-right ml-1 text-xs"></i>
+                </a>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Exemple d’annonce (à dupliquer ou remplacer dynamiquement) -->
+                <div>
+                    <img src="images/apt1.jpg" alt="Studio à Paris" class="w-full h-48 object-cover rounded-t-lg">
+                    <div class="mt-2 text-right">
+                        <span class="font-medium text-sm">Studio</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <h3 class="text-lg font-bold">Studio à Paris 15ème</h3>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-2">Paris 15ème, proche ECE</p>
+                    <p class="font-bold text-lg mb-4">650€ <span class="text-gray-500 font-normal text-sm">/ mois</span></p>
+                    <a href="details-logement.html" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">
+                        Voir détails
+                    </a>
+                </div>
+                <div>
+                    <img src="images/apt2.jpg" alt="Chambre en collocation" class="w-full h-48 object-cover rounded-t-lg">
+                    <div class="mt-2 text-right">
+                        <span class="font-medium text-sm">Chambre</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <h3 class="text-lg font-bold">Chambre en collocation</h3>
+                        <div class="flex items-center">
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <span class="font-medium">4.6</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-2">Lyon 7ème, près du campus</p>
+                    <p class="font-bold text-lg mb-4">450€ <span class="text-gray-500 font-normal text-sm">/ mois</span></p>
+                    <a href="details-logement.html" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">
+                        Voir détails
+                    </a>
+                </div>
+                <div>
+                    <img src="images/apt3.jpg" alt="Appartement à Lille" class="w-full h-48 object-cover rounded-t-lg">
+                    <div class="mt-2 text-right">
+                        <span class="font-medium text-sm">Appartement</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-2">
+                        <h3 class="text-lg font-bold">Appartement 2 pièces</h3>
+                        <div class="flex items-center">
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <span class="font-medium">4.9</span>
+                        </div>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-2">Lille Centre, 10 min du campus</p>
+                    <p class="font-bold text-lg mb-4">550€ <span class="text-gray-500 font-normal text-sm">/ mois</span></p>
+                    <a href="details-logement.html" class="block text-center bg-black text-white py-3 rounded-lg hover:bg-gray-800">
+                        Voir détails
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Appel à l'action -->
+<section class="bg-black text-white py-12 px-4">
+    <div class="container mx-auto max-w-3xl text-center">
+        <h2 class="text-2xl font-bold mb-4">Vous avez un logement à proposer ?</h2>
+        <p class="text-sm mb-6 opacity-90">Partagez votre logement avec la communauté Omnes et gagnez de l'argent</p>
+        <a href="publier.html" class="bg-white text-black font-medium py-2 px-6 rounded-lg border border-white hover:bg-gray-100 inline-flex items-center shadow-md">
+            <i class="fas fa-plus mr-2"></i> Publier un logement
+        </a>
+        <div class="mt-12 pt-4 border-t border-gray-700 mx-auto w-full"></div>
+        <div class="text-center text-gray-400 text-xs mt-4">
+            &copy; 2025 OmnesBnB. Tous droits réservés.
+        </div>
+    </div>
+</section>
+
+<script>
+    // Gestion du menu mobile (affichage/caché)
+    document.getElementById('menu-burger').addEventListener('click', function() {
+        const menuMobile = document.getElementById('menu-mobile');
+        menuMobile.classList.toggle('hidden');
+    });
+</script>
+</body>
+</html>
