@@ -46,7 +46,7 @@ $site_config = [
     'site_name' => 'OmnesBnB',
     'site_url' => 'http://' . $_SERVER['HTTP_HOST'],  // Ajustez en fonction de votre configuration
     'admin_email' => 'admin@omnesbnb.fr',
-    'upload_max_size' => 5 * 1024 * 1024,  // 5 Mo
+    'upload_max_size' => 100 * 1024 * 1024,  // 100 Mo
     'allowed_extensions' => ['jpg', 'jpeg', 'png', 'webp'],
     'version' => '1.0.0'
 ];

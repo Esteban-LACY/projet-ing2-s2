@@ -3,6 +3,13 @@
 include 'config.php';
 include 'security.php';
 
+// Augmenter les limites d'upload
+ini_set('upload_max_filesize', '100M');
+ini_set('post_max_size', '110M');
+ini_set('memory_limit', '256M');
+ini_set('max_execution_time', '600');
+ini_set('max_input_time', '600');
+
 // Vérification que l'utilisateur est connecté
 if (!isset($_SESSION['user_id'])) {
     header('Location: connexion.php?login_error=Vous devez être connecté pour publier un logement');
@@ -59,7 +66,7 @@ if ($prix_nuit <= 0 || $prix_semaine <= 0 || $prix_mois <= 0 || $prix_annee <= 0
 }
 
 // Vérification de la cohérence des prix
-if ($prix_nuit * 7 <= $prix_semaine || $prix_semaine * 4 <= $prix_mois || $prix_mois * 12 <= $prix_annee) {
+if ($prix_nuit * 7 > $prix_semaine || $prix_semaine * 4 > $prix_mois || $prix_mois * 12 > $prix_annee) {
     header('Location: publier.php?error=Les prix ne sont pas cohérents');
     exit;
 }
@@ -87,8 +94,8 @@ if (!in_array($photo_principale_ext, $allowed_ext)) {
     exit;
 }
 
-// Taille maximale (5 Mo)
-if ($photo_principale_size > 5 * 1024 * 1024) {
+// Taille maximale (100 Mo)
+if ($photo_principale_size > 100 * 1024 * 1024) {
     header('Location: publier.php?error=La photo principale ne doit pas dépasser 5 Mo');
     exit;
 }
@@ -132,7 +139,7 @@ if (mysqli_stmt_execute($stmt)) {
                 // Validation de la photo annexe
                 $photo_annexe_ext = strtolower(pathinfo($photo_annexe_name, PATHINFO_EXTENSION));
 
-                if (in_array($photo_annexe_ext, $allowed_ext) && $photo_annexe_size <= 5 * 1024 * 1024) {
+                if (in_array($photo_annexe_ext, $allowed_ext) && $photo_annexe_size <= 100 * 1024 * 1024) {
                     $photo_annexe_new_name = uniqid('logement_annexe_') . '_' . time() . '_' . $i . '.' . $photo_annexe_ext;
                     $photo_annexe_destination = $upload_dir . $photo_annexe_new_name;
 

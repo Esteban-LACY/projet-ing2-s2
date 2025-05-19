@@ -184,13 +184,13 @@ $mes_logements = mysqli_fetch_all($result, MYSQLI_ASSOC);
                     <label for="photo_principale" class="block text-lg font-semibold text-gray-700 mb-2">Photo principale (obligatoire)</label>
                     <input type="file" id="photo_principale" name="photo_principale" accept="image/png, image/jpeg, image/webp"
                            class="w-full text-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-2 file:border-black file:text-black file:bg-white file:font-semibold" required />
-                    <p class="text-xs text-gray-500 mt-1">C'est la photo principale affichée sur l'annonce (formats : jpg, png, webp).</p>
+                    <p class="text-xs text-gray-500 mt-1">C'est la photo principale affichée sur l'annonce (formats : jpg, png, webp, taille max: 100 Mo).</p>
                 </div>
                 <div>
                     <label for="photos_annexes" class="block text-lg font-semibold text-gray-700 mb-2">Photos annexes (optionnelles)</label>
                     <input type="file" id="photos_annexes" name="photos_annexes[]" multiple accept="image/png, image/jpeg, image/webp"
                            class="w-full text-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-2 file:border-black file:text-black file:bg-white file:font-semibold"/>
-                    <p class="text-xs text-gray-500 mt-1">Ajoutez des photos supplémentaires si besoin (formats : jpg, png, webp).</p>
+                    <p class="text-xs text-gray-500 mt-1">Ajoutez des photos supplémentaires si besoin (formats : jpg, png, webp, taille max: 100 Mo).</p>
                 </div>
                 <!-- FIN PHOTOS LOGEMENT -->
                 <div>
@@ -526,23 +526,7 @@ $mes_logements = mysqli_fetch_all($result, MYSQLI_ASSOC);
         const mois = parseFloat(prixMois.value);
         const annee = parseFloat(prixAnnee.value);
 
-        if (nuit * 7 > semaine) {
-            alert('Le prix à la semaine devrait être inférieur à 7 fois le prix à la nuit.');
-            e.preventDefault();
-            return;
-        }
 
-        if (semaine * 4 > mois) {
-            alert('Le prix au mois devrait être inférieur à 4 fois le prix à la semaine.');
-            e.preventDefault();
-            return;
-        }
-
-        if (mois * 12 > annee) {
-            alert('Le prix à l\'année devrait être inférieur à 12 fois le prix au mois.');
-            e.preventDefault();
-            return;
-        }
 
         // Vérifier la photo principale
         const photoPrincipale = document.getElementById('photo_principale');

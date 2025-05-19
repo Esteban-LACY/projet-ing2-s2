@@ -3,6 +3,13 @@
 include 'config.php';
 include 'security.php';
 
+// Augmenter les limites d'upload
+ini_set('upload_max_filesize', '100M');
+ini_set('post_max_size', '110M');
+ini_set('memory_limit', '256M');
+ini_set('max_execution_time', '600');
+ini_set('max_input_time', '600');
+
 // Vérification que l'utilisateur est connecté
 if (!isset($_SESSION['user_id'])) {
     header('Location: connexion.php?login_error=Vous devez être connecté pour accéder à cette page');
@@ -42,8 +49,8 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_photo') {
         exit;
     }
 
-    // Vérification de la taille du fichier (max 2Mo)
-    if ($_FILES['photo']['size'] > 2 * 1024 * 1024) {
+    // Vérification de la taille du fichier (max 100Mo)
+    if ($_FILES['photo']['size'] > 100 * 1024 * 1024) {
         header('Location: profil.php?error=La photo ne doit pas dépasser 2Mo');
         exit;
     }
