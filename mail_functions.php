@@ -25,21 +25,42 @@ if (!defined('OMNESBNB')) {
  * @return bool True si l'email a été envoyé, False sinon
  */
 function send_email($to, $subject, $message, $headers = []) {
-    // Toujours enregistrer dans un fichier log (local ou production)
-    $log_file = 'emails_log.txt';
-    $log_message = "=================================================\n";
-    $log_message .= "Date: " . date('Y-m-d H:i:s') . "\n";
-    $log_message .= "To: " . $to . "\n";
-    $log_message .= "Subject: " . $subject . "\n";
-    $log_message .= "Headers: " . print_r($headers, true) . "\n";
-    $log_message .= "Message: \n" . $message . "\n";
-    $log_message .= "=================================================\n\n";
+    // En environnement de développement, on peut simplement simuler l'envoi d'emails
+    // et écrire dans un fichier de log
+    if ($_SERVER['SERVER_NAME'] == 'localhost' || $_SERVER['SERVER_NAME'] == '127.0.0.1') {
+        $log_file = 'emails_log.txt';
+        $log_message = "=================================================\n";
+        $log_message .= "Date: " . date('Y-m-d H:i:s') . "\n";
+        $log_message .= "To: " . $to . "\n";
+        $log_message .= "Subject: " . $subject . "\n";
+        $log_message .= "Headers: " . print_r($headers, true) . "\n";
+        $log_message .= "Message: \n" . $message . "\n";
+        $log_message .= "=================================================\n\n";
 
-    file_put_contents($log_file, $log_message, FILE_APPEND);
+        file_put_contents($log_file, $log_message, FILE_APPEND);
 
-    // MODIFICATION: On retourne toujours true pour simuler un envoi réussi
-    // même en localhost
-    return true;
+        return true;
+    }
+
+    // En production, on utilise la fonction mail() de PHP
+    // Il est recommandé d'utiliser une bibliothèque comme PHPMailer ou Swift Mailer
+    // pour des fonctionnalités plus avancées et une meilleure gestion des erreurs
+
+    // Préparation des en-têtes
+    $default_headers = [
+        'MIME-Version: 1.0',
+        'Content-type: text/plain; charset=UTF-8',
+        'From: OmnesBnB <noreply@omnesbnb.fr>',
+        'Reply-To: noreply@omnesbnb.fr',
+        'X-Mailer: PHP/' . phpversion()
+    ];
+
+    // Fusion avec les en-têtes additionnels
+    $headers = array_merge($default_headers, $headers);
+    $headers_str = implode("\r\n", $headers);
+
+    // Envoi de l'email
+    return mail($to, $subject, $message, $headers_str);
 }
 
 /**
@@ -53,18 +74,6 @@ function send_email($to, $subject, $message, $headers = []) {
  */
 function send_verification_email($email, $token, $prenom, $nom) {
     global $site_config;
-
-    // MODIFICATION: Activer automatiquement le compte sans vérification d'email
-    // Cette partie est appelée depuis process_register.php
-    global $conn;
-    if (isset($conn)) {
-        $activate_query = "UPDATE users SET active = 1 WHERE email = ?";
-        $activate_stmt = mysqli_prepare($conn, $activate_query);
-        if ($activate_stmt) {
-            mysqli_stmt_bind_param($activate_stmt, "s", $email);
-            mysqli_stmt_execute($activate_stmt);
-        }
-    }
 
     $verification_link = $site_config['site_url'] . "/verification.php?email=" . urlencode($email) . "&token=" . $token;
 
