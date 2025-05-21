@@ -116,6 +116,10 @@ $user_name = $user_connected ? $_SESSION['user_nom'] . ' ' . $_SESSION['user_pre
                 <?php else: ?>
                     <a href="connexion.php" class="text-sm bg-black text-white py-2 px-6 rounded-lg hover:bg-gray-800">Connexion / Inscription</a>
                 <?php endif; ?>
+
+                <?php if(isset($_SESSION['is_admin']) && $_SESSION['is_admin']): ?>
+                    <a href="admin.php" class="text-sm text-black hover:text-black">Administration</a>
+                <?php endif; ?>
             </nav>
             <div class="md:hidden">
                 <button id="menu-burger" class="flex items-center p-2 rounded-lg border-2 border-black">
