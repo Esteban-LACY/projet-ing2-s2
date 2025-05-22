@@ -23,7 +23,7 @@ $db_name = 'omnesbnb';
 date_default_timezone_set('Europe/Paris');
 
 // Établissement de la connexion à la base de données
-$conn = mysqli_connect('127.0.0.1', 'root', '', 'omnesbnb');
+$conn = mysqli_connect($db_host, $db_user, $db_pass, $db_name);
 
 // Vérification de la connexion
 if (!$conn) {
